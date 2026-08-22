@@ -1,5 +1,5 @@
 """
-AlphaMind 证券投研智能咨询助手 — FastAPI 入口
+AlphaMind — Securities Investment-Research Assistant (FastAPI entrypoint)
 
 所有核心组件在 lifespan 中初始化，通过环境变量配置。
 """
@@ -33,10 +33,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BANNER = r"""
-   ╔════════════════════════════╗
-   ║   AlphaMind  v2.0          ║
-   ║   证券投研 AI 咨询助手      ║
-   ╚════════════════════════════╝
+   ╔════════════════════════════════════╗
+   ║   AlphaMind  v2.0                  ║
+   ║   Securities Research Assistant    ║
+   ╚════════════════════════════════════╝
 """
 
 # ── 全局组件（lifespan 中初始化）─────────────────────────────────────────────
@@ -50,7 +50,7 @@ _skill_manager = None
 def _anthropic_cfg() -> Dict[str, Any]:
     key = os.getenv("ANTHROPIC_API_KEY", "")
     if not key:
-        raise RuntimeError("未设置 ANTHROPIC_API_KEY")
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
     cfg: Dict[str, Any] = {
         "api_key":  key,
         "model":    os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022").strip(),
@@ -124,13 +124,13 @@ async def lifespan(app: FastAPI):
         chroma_port=int(os.getenv("CHROMA_PORT", "8000")),
         chroma_path=os.getenv("CHROMA_PERSIST_DIRECTORY", "/app/data/chroma"),
     )
-    logger.info(f"知识库已加载: {await kb.doc_count_async()} 个文档片段")
+    logger.info(f"Knowledge base loaded: {await kb.doc_count_async()} document chunks")
 
     def knowledge_fallback(params: Dict[str, Any], context: Optional[Dict[str, Any]], error: str):
         query = params.get("query", "")
         return [{
-            "title": "知识库降级结果",
-            "content": f"知识库暂时不可用，未能完成对“{query}”的检索。请稍后重试，或转接人工投顾确认。",
+            "title": "Knowledge base fallback",
+            "content": f"The knowledge base is temporarily unavailable; the search for \"{query}\" could not be completed. Please try again later or contact a human advisor.",
             "score": 0.0,
             "fallback": True,
             "error": error,
@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI):
 
     _tool_manager.register(Tool(
         name="knowledge_search",
-        description="搜索知识库（基于 ChromaDB 向量检索）",
+        description="Search the knowledge base (ChromaDB vector retrieval)",
         handler=kb.search_handler,
         schema={
             "type": "object",
@@ -174,19 +174,19 @@ async def lifespan(app: FastAPI):
         baseline_path=os.getenv("EVAL_BASELINE_PATH", "/app/data/eval/baseline.json"),
     )
 
-    logger.info("AlphaMind 已就绪")
+    logger.info("AlphaMind ready")
     yield
 
     await _monitor.stop()
     if _memory is not None:
         await _memory.close()
-    logger.info("AlphaMind 已关闭")
+    logger.info("AlphaMind stopped")
 
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="AlphaMind 证券投研智能咨询助手",
-    description="证券投研信息问答 + 投资者教育 + 研报/数据检索助手。不构成投资建议、不荐股、不承诺收益、不代客操作。",
+    title="AlphaMind — Securities Investment-Research Assistant",
+    description="Securities research Q&A + investor education + report/data retrieval. Not investment advice; no stock recommendations, no return guarantees, no trading on your behalf.",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -230,7 +230,7 @@ class ChatResponse(BaseModel):
 @app.get("/health")
 async def health():
     if _orchestrator is None:
-        raise HTTPException(503, "服务未就绪")
+        raise HTTPException(503, "Service not ready")
     return {"status": "ok", "agents": _orchestrator.get_stats()}
 
 
@@ -238,7 +238,7 @@ async def health():
 async def skills_summary():
     """查看当前已加载的 Skills，便于确认热加载结果和排查解析错误。"""
     if _skill_manager is None:
-        raise HTTPException(503, "Skills 未初始化")
+        raise HTTPException(503, "Skills not initialized")
     return _skill_manager.summary()
 
 
@@ -246,7 +246,7 @@ async def skills_summary():
 async def reload_skills():
     """运行时重新扫描 Skill 目录，不需要重启服务。"""
     if _skill_manager is None:
-        raise HTTPException(503, "Skills 未初始化")
+        raise HTTPException(503, "Skills not initialized")
     _skill_manager.reload()
     if _orchestrator is not None:
         _orchestrator.set_skill_manager(_skill_manager)
@@ -260,7 +260,7 @@ async def chat(req: ChatRequest):
       记忆读取 → 意图识别 → Agent 路由 → 执行 → 记忆写入
     """
     if _orchestrator is None or _memory is None:
-        raise HTTPException(503, "服务未就绪")
+        raise HTTPException(503, "Service not ready")
 
     from agents.agent_orchestrator import Request as OrcReq
     from memory.conversation_memory import MsgRole
@@ -341,7 +341,7 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
         if not result.success or not isinstance(result.data, list) or not result.data:
             return "", False
 
-        parts = ["[知识库检索结果]"]
+        parts = ["[Knowledge base results]"]
         used = False
         for i, item in enumerate(result.data[:top_k], start=1):
             if not isinstance(item, dict):
@@ -352,11 +352,11 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
             if not content:
                 continue
             used = True
-            parts.append(f"{i}. 标题: {title}\n   相关度: {score}\n   内容: {content[:600]}")
+            parts.append(f"{i}. Title: {title}\n   Relevance: {score}\n   Content: {content[:600]}")
 
         if not used:
             return "", False
-        parts.append("请优先依据以上知识库内容回答；如果知识库内容不足，再结合通用投研信息说明，并注意不得给出个股买卖建议。")
+        parts.append("Answer primarily based on the knowledge above; if it is insufficient, supplement with general investment-research information, and never give individual stock buy/sell advice.")
         return "\n".join(parts), True
     except Exception as ex:
         logger.warning(f"构建知识库上下文失败: {ex}")
@@ -382,10 +382,17 @@ def _should_use_knowledge(message: str, intent=None) -> bool:
     if msg in greetings:
         return False
     business_keywords = [
+        # 中文
         "行情", "指数", "股价", "etf", "基金", "研报", "财报", "估值", "市盈率",
         "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "适当性",
         "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金",
         "对账单", "交割单", "费率", "佣金", "涨跌停", "t+1", "术语",
+        # 英文
+        "market", "index", "quote", "etf", "fund", "research", "financial", "valuation",
+        "p/e", "roe", "factor", "backtest", "sharpe", "drawdown", "fundamental",
+        "suitability", "risk level", "risk rating", "risk disclosure", "account",
+        "transfer", "withdrawal", "deposit", "statement", "fee", "commission",
+        "price limit", "trading rule", "term",
     ]
     return len(msg) >= 4 or any(kw in msg for kw in business_keywords)
 
@@ -394,7 +401,7 @@ def _should_use_knowledge(message: str, intent=None) -> bool:
 async def monitor_summary():
     """实时监控摘要：Agent 成功率、工具统计、告警、优化建议。"""
     if _monitor is None:
-        raise HTTPException(503, "服务未就绪")
+        raise HTTPException(503, "Service not ready")
     return _monitor.summary()
 
 
@@ -411,7 +418,7 @@ async def search(query: str, top_k: int = 5):
     展示 MCP 工具调用的核心亮点。
     """
     if _tool_manager is None:
-        raise HTTPException(503, "服务未就绪")
+        raise HTTPException(503, "Service not ready")
     result = await _tool_manager.search_with_rewrite("knowledge_search", query, top_k=top_k)
     return {"query": query, "results": result.data, "reranked": result.reranked}
 
@@ -448,7 +455,7 @@ class EvalRunInput(BaseModel):
     dialog_cases: Optional[List[EvalDialogInput]] = None
 
 
-@app.post("/knowledge/add", tags=["知识库"])
+@app.post("/knowledge/add", tags=["Knowledge"])
 async def add_knowledge(body: BatchDocInput):
     """
     批量导入文档到知识库。
@@ -467,14 +474,14 @@ async def add_knowledge(body: BatchDocInput):
     """
     tool = _tool_manager._tools.get("knowledge_search") if _tool_manager else None
     if tool is None:
-        raise HTTPException(503, "知识库未初始化")
+        raise HTTPException(503, "Knowledge base not initialized")
     kb = tool.handler.__self__
     count = await kb.add_documents_async([{"title": d.title, "content": d.content} for d in body.documents])
     total = await kb.doc_count_async()
     return {"message": f"成功导入 {count} 个文档片段", "added_chunks": count, "total_chunks": total}
 
 
-@app.post("/knowledge/upload", tags=["知识库"])
+@app.post("/knowledge/upload", tags=["Knowledge"])
 async def upload_knowledge(file: UploadFile = File(...)):
     """
     上传文件导入知识库。
@@ -487,7 +494,7 @@ async def upload_knowledge(file: UploadFile = File(...)):
     """
     tool = _tool_manager._tools.get("knowledge_search") if _tool_manager else None
     if tool is None:
-        raise HTTPException(503, "知识库未初始化")
+        raise HTTPException(503, "Knowledge base not initialized")
     kb = tool.handler.__self__
 
     content = await file.read()
@@ -519,12 +526,12 @@ async def upload_knowledge(file: UploadFile = File(...)):
     }
 
 
-@app.get("/knowledge/stats", tags=["知识库"])
+@app.get("/knowledge/stats", tags=["Knowledge"])
 async def knowledge_stats():
     """查看知识库统计信息（文档片段总数）。"""
     tool = _tool_manager._tools.get("knowledge_search") if _tool_manager else None
     if tool is None:
-        raise HTTPException(503, "知识库未初始化")
+        raise HTTPException(503, "Knowledge base not initialized")
     kb = tool.handler.__self__
     return {"total_chunks": await kb.doc_count_async()}
 
@@ -533,7 +540,7 @@ async def knowledge_stats():
 async def run_eval(body: Optional[EvalRunInput] = None):
     """运行内置评测用例，返回评测报告。"""
     if _evaluator is None:
-        raise HTTPException(503, "服务未就绪")
+        raise HTTPException(503, "Service not ready")
     from evaluation.evaluator import DEFAULT_DIALOG_CASES, DEFAULT_INTENT_CASES, IntentTestCase
 
     if body and body.intent_cases is not None:
@@ -583,7 +590,7 @@ async def run_eval(body: Optional[EvalRunInput] = None):
 # ── 交互式 CLI ────────────────────────────────────────────────────────────────
 async def _cli():
     print(BANNER)
-    print("AlphaMind CLI — 输入 quit 退出\n")
+    print("AlphaMind CLI — type 'quit' to exit\n")
 
     from agents.agent_orchestrator import AgentOrchestrator, Request
     from memory.conversation_memory import MemoryManager, MsgRole
