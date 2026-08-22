@@ -117,7 +117,7 @@ Return JSON only, e.g.: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7
         response: str,
         context: Optional[str] = None,
     ) -> QualityScores:
-        ctx_section = f"背景信息: {context}" if context else ""
+        ctx_section = f"Context: {context}" if context else ""
         prompt = self.JUDGE_PROMPT.format(
             question=question,
             response=response,

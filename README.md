@@ -1,146 +1,148 @@
-# AlphaMind 证券投研智能咨询助手
+# AlphaMind — Securities Investment-Research Assistant
 
-> AlphaMind 是一个面向证券投研场景的**多 Agent 编排运行时**:提供证券投研信息问答、投资者教育和研报/数据检索。
-> **它不构成投资建议、不荐股、不承诺收益、不代客操作**;对索要买卖建议、择时、保收益或代客的请求,会由**投资建议护栏**拦截并转人工投顾。
+> AlphaMind is a **multi-agent runtime** for securities investment research: securities research Q&A, investor education, and report/data retrieval.
+> **It does not constitute investment advice; it does not recommend stocks, promise returns, or trade on your behalf.** Requests for buy/sell advice, market timing, guaranteed returns, or trading on the user's behalf are intercepted by an **investment-advice guardrail** and escalated to a human advisor.
+>
+> Bilingual: replies follow the language of the user's question (Chinese or English). Chinese docs: [README.zh.md](README.zh.md).
 
-核心链路:
+Core flow:
 
 ```text
-用户请求
+User request
   -> FastAPI /chat
-  -> MemoryManager 读取 Redis 工作记忆 + ChromaDB 情景记忆 + 用户画像
-  -> IntentRecognizer 三路融合识别意图(LLM + Embedding + 关键词)
-  -> ⚠️ 投资建议护栏:命中荐股/择时/保收益/代客 → 拦截 + 风险揭示 + 升级
-  -> 按意图门控 RAG(查询改写 → 并行召回 → 去重 → LLM 重排)
-  -> AgentOrchestrator 路由到 Market / Research / Compliance Agent(主+辅)
-  -> 注入动态 Skills → LLM 生成回复
-  -> 写入 Redis,异步更新 ChromaDB 用户画像
-  -> Monitor 在线降权 + LLM-as-Judge 评测闭环
+  -> MemoryManager reads Redis working memory + ChromaDB episodic memory + user profile
+  -> IntentRecognizer classifies intent via 3-way fusion (LLM + Embedding + keywords)
+  -> ⚠️ Investment-advice guardrail: stock picks / timing / guaranteed returns / trade-for-me -> intercept + risk disclosure + escalate
+  -> Intent-gated RAG (query rewrite -> parallel recall -> dedup -> LLM rerank)
+  -> AgentOrchestrator routes to Market / Research / Compliance agents (primary + supporting)
+  -> inject dynamic Skills -> LLM generates the reply
+  -> write to Redis, async update ChromaDB user profile
+  -> Monitor online routing penalty + LLM-as-Judge evaluation loop
 ```
 
-## 1. 能力总览
+## 1. Capabilities
 
-| 能力 | 说明 |
-|------|------|
-| 细粒度意图识别 | ~20 类证券意图,分行情/投研/合规三组 + 护栏,LLM + Embedding + 关键词三路加权投票 |
-| **投资建议护栏** | intent-gated guardrail:荐股/择时/保收益/代客请求被拦截,返回风险揭示并升级人工投顾 |
-| 意图门控 RAG | 仅业务信息类意图检索 ChromaDB 知识库;查询改写、并行召回、去重、LLM 重排 |
-| 多 Agent 路由 | 行情与信息 / 投研与分析 / 合规与适当性,输出 primary + supporting、routing_reason、confidence |
-| 三级记忆 | Redis 工作记忆(24h TTL)+ ChromaDB 情景记忆 + 用户画像,超阈值自动压缩 |
-| 动态 Skills | 行情/投研/合规三类规范,按 Agent 类型 + 关键词注入,支持热加载 |
-| 工具治理 | 知识库检索的参数校验、TTL 缓存、超时、熔断、fallback 降级 |
-| 观测与评测 | Monitor 按成功率/延迟写回 routing_penalty;LLM-as-Judge 四维评分 + 护栏拦截准确率 + 回归检测 |
+| Capability | Description |
+|------------|-------------|
+| Fine-grained intent recognition | ~20 securities intents in three groups (market / research / compliance) + guardrail; LLM + Embedding + keyword weighted voting |
+| **Investment-advice guardrail** | intent-gated guardrail: stock-pick / timing / guaranteed-return / trade-for-me requests are intercepted, returning a risk disclosure and escalating to a human advisor |
+| Intent-gated RAG | only business-information intents query the ChromaDB knowledge base; query rewrite, parallel recall, dedup, LLM rerank |
+| Multi-agent routing | Market & Information / Research & Analysis / Compliance & Suitability; outputs primary + supporting, routing_reason, confidence |
+| Layered memory | Redis working memory (24h TTL) + ChromaDB episodic memory + user profile; auto-compress over threshold |
+| Dynamic Skills | market / research / compliance guidelines, injected by agent type + keywords, hot-reloadable |
+| Tool reliability | parameter validation, TTL cache, timeout, circuit breaker, and fallback for the knowledge-search tool |
+| Observability & evaluation | Monitor writes back routing_penalty from success rate/latency; LLM-as-Judge four-dimension scoring + guardrail hit rate + regression detection |
 
-## 2. Agent 角色
+## 2. Agents
 
-| Agent | 职责 |
-|-------|------|
-| **MarketAgent**(行情与信息) | 行情/指数/ETF与个股产品信息、术语解释;只陈述信息,不预测涨跌 |
-| **ResearchAgent**(投研与分析) | 研报检索、财报/基本面解读、估值与量化概念(因子/回测/夏普/回撤);只客观解读,不下买卖结论 |
-| **ComplianceAgent**(合规与适当性) | 风险等级 R1–R5、适当性匹配、风险揭示、开户/账户、交易规则与费率 |
-| **Escalation**(人工投顾升级) | 护栏命中、投诉、适当性严重不匹配时转人工投顾 |
+| Agent | Responsibility |
+|-------|----------------|
+| **MarketAgent** (Market & Information) | quotes / indices / ETF & stock product info / term explanations; state facts, no price predictions |
+| **ResearchAgent** (Research & Analysis) | research retrieval, financials/fundamentals, valuation and quant concepts (factor/backtest/Sharpe/drawdown); interpret only, no buy/sell conclusions |
+| **ComplianceAgent** (Compliance & Suitability) | risk ratings R1–R5, suitability matching, risk disclosure, account opening, trading rules & fees |
+| **Escalation** (human advisor) | on guardrail hits, complaints, or serious suitability mismatch, transfer to a human advisor |
 
-## 3. 意图体系(~20 类,3 组 + 护栏)
+## 3. Intents (~20, 3 groups + guardrail)
 
-- **行情信息组 → Market**:`market_quote` `product_info` `term_explain` `trading_rule`
-- **投研分析组 → Research**:`research_report` `fundamental` `valuation` `comparison` `quant_concept`
-- **合规适当性组 → Compliance**:`account` `funding` `suitability` `risk_disclosure` `statement`
-- **护栏/流程**:⚠️`advice_request`(荐股/择时/保收益/代客)、`complaint` `human_handoff` `escalation` `greeting` `feedback` `other`
+- **Market group → Market**: `market_quote` `product_info` `term_explain` `trading_rule`
+- **Research group → Research**: `research_report` `fundamental` `valuation` `comparison` `quant_concept`
+- **Compliance group → Compliance**: `account` `funding` `suitability` `risk_disclosure` `statement`
+- **Flow / guardrail**: ⚠️`advice_request` (stock picks / timing / guaranteed returns / trade-for-me), `complaint` `human_handoff` `escalation` `greeting` `feedback` `other`
 
-## 4. 快速开始
+## 4. Quick start
 
-### 4.1 环境
+### 4.1 Requirements
 
 - Docker + Docker Compose
-- Anthropic API Key,或兼容 Anthropic 协议的第三方 Key(如 DeepSeek)
+- An Anthropic API key, or an Anthropic-compatible third-party key (e.g., DeepSeek)
 
-配置 `.env`(最少):
+Configure `.env` (minimum):
 
 ```env
 ANTHROPIC_API_KEY=your_api_key
-# 兼容第三方接口示例
+# Third-party compatible endpoint example:
 # ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 # ANTHROPIC_MODEL=deepseek-v4-pro
 ```
 
-### 4.2 Docker Compose 全栈部署
+### 4.2 Full stack via Docker Compose
 
 ```bash
 docker compose up -d --build
-docker compose logs -f alphamind      # 容器/网络名沿用 alphamind_ 前缀
+docker compose logs -f alphamind      # container/network names keep the alphamind_ prefix
 curl http://localhost:8000/health
 # Swagger: http://localhost:8000/docs
 ```
 
-启动服务:AlphaMind API(8000)、Nginx(80)、ChromaDB(8001)、Redis(6379)、Prometheus(9090)。
+Starts: AlphaMind API (8000), Nginx (80), ChromaDB (8001), Redis (6379), Prometheus (9090).
 
-### 4.3 CLI 交互
+### 4.3 CLI
 
 ```bash
 docker compose run --rm alphamind python api/main.py --cli
 ```
 
-### 4.4 本地运行测试
+### 4.4 Run tests locally
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest tests/ -q     # 意图/路由/护栏/Skills 确定性单测
+python -m pytest tests/ -q     # deterministic unit tests: intent / routing / guardrail / skills (Chinese & English)
 ```
 
-## 5. 接口总览
+## 5. API overview
 
-| 方法 | 路径 | 作用 |
-|------|------|------|
-| `GET` | `/health` | 健康检查 |
-| `POST` | `/chat` | 主对话:记忆 → 意图 → 护栏 → 门控 RAG → 路由 → 回复 |
-| `POST` | `/search` | RAG 检索优化链路(查询改写/并行召回/重排) |
-| `GET` | `/monitor` | Agent/工具指标、告警、优化建议 |
-| `GET` `POST` | `/skills` `/skills/reload` | 查看/热加载动态 Skills |
-| `POST` | `/knowledge/add` `/knowledge/upload` | 导入知识库文档 |
-| `GET` | `/knowledge/stats` | 知识库片段数 |
-| `POST` | `/eval/run` | 端到端评测(含 guardrail_hit_rate) |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | health check |
+| `POST` | `/chat` | main chat: memory -> intent -> guardrail -> gated RAG -> routing -> reply |
+| `POST` | `/search` | RAG retrieval pipeline (query rewrite / parallel recall / rerank) |
+| `GET` | `/monitor` | agent/tool metrics, alerts, suggestions |
+| `GET` `POST` | `/skills` `/skills/reload` | view / hot-reload dynamic Skills |
+| `POST` | `/knowledge/add` `/knowledge/upload` | import knowledge-base documents |
+| `GET` | `/knowledge/stats` | knowledge-base chunk count |
+| `POST` | `/eval/run` | end-to-end evaluation (includes guardrail_hit_rate) |
 
-### 5.1 /chat 示例
+### 5.1 /chat examples
 
-信息类问题(命中知识库 + 对应 Agent):
+Information question (hits knowledge base + the right agent):
 
 ```bash
 curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" -d '{
-  "message": "沪深300ETF的费率和跟踪误差大概是多少？",
+  "message": "What are the fee and tracking error of the CSI 300 ETF?",
   "user_id": "u1", "conv_id": "c1"
 }'
 ```
 
-适当性问题(路由到 Compliance):
+Suitability question (routes to Compliance):
 
 ```bash
 curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" -d '{
-  "message": "我风险测评是R2，想开通两融可以吗？", "user_id": "u1", "conv_id": "c1"
+  "message": "My risk assessment is R2, can I open margin trading?", "user_id": "u1", "conv_id": "c1"
 }'
 ```
 
-⚠️ 护栏拦截示例(荐股请求 → 拒答 + 风险揭示 + 升级):
+⚠️ Guardrail example (stock-pick request -> refuse + risk disclosure + escalate):
 
 ```bash
 curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" -d '{
-  "message": "帮我推荐一只能翻倍的股票，最好明天就涨", "user_id": "u1", "conv_id": "c1"
+  "message": "Recommend me a stock that can double, ideally rising tomorrow", "user_id": "u1", "conv_id": "c1"
 }'
-# 返回 escalated=true,response 含“不构成投资建议”+ 风险提示 + 建议转人工投顾
+# Returns escalated=true; response contains "does not constitute investment advice" + risk notice + suggests a human advisor
 ```
 
-## 6. 知识库
+## 6. Knowledge base
 
-`mcp/knowledge_base.py` 使用 ChromaDB `knowledge_base` collection。首次启动若为空,自动导入 8 篇默认证券文档:术语指标词典、ETF 产品说明、投资者适当性与风险等级、证券交易规则、风险揭示书要点、开户与账户管理、财报基本面解读、合规红线与投资者教育。演示上传文件见 `data/demo_docs/`。
+`mcp/knowledge_base.py` uses the ChromaDB `knowledge_base` collection. On first start, if empty, it auto-imports 8 default securities documents: terms & metrics glossary, ETF product guide, investor suitability & risk ratings, securities trading rules, risk disclosure essentials, account opening & management, financials/fundamentals reading guide, and compliance red lines & investor education. Demo upload files are under `data/demo_docs/`.
 
-## 7. 记忆与评测
+## 7. Memory & evaluation
 
-- **三级记忆**:Redis `wm:{user}:{conv}`(24h TTL,达 15 条压缩,保留最近 5 条);ChromaDB `episodic`(历史摘要)、`user_profile`(用户画像)。
-- **评测**:`POST /eval/run` 真实调用 Orchestrator 生成回复,LLM-as-Judge 四维评分(相关性/准确性/完整性/有用性),并统计**护栏拦截准确率 `guardrail_hit_rate`**、意图 Accuracy/Macro-F1 与回归检测。
+- **Layered memory**: Redis `wm:{user}:{conv}` (24h TTL, compress at 15 messages, keep the latest 5); ChromaDB `episodic` (history summaries) and `user_profile`.
+- **Evaluation**: `POST /eval/run` actually calls the Orchestrator to generate replies, scores them with LLM-as-Judge on four dimensions (relevance / accuracy / completeness / helpfulness), and reports the **guardrail hit rate `guardrail_hit_rate`**, intent Accuracy/Macro-F1, and regression detection.
 
-## 8. 技术栈
+## 8. Tech stack
 
-Python 3.12 · FastAPI · Anthropic SDK(兼容 DeepSeek)· Redis · ChromaDB · Prometheus · Docker Compose · pytest
+Python 3.12 · FastAPI · Anthropic SDK (DeepSeek-compatible) · Redis · ChromaDB · Prometheus · Docker Compose · pytest
 
-## 9. 合规声明
+## 9. Compliance notice
 
-AlphaMind 仅提供证券投研信息、投资者教育与数据检索,**不构成投资建议,不荐股、不预测点位、不承诺收益、不代客操作**。具体投资决策请咨询持牌投资顾问并结合自身风险承受能力独立判断。
+AlphaMind provides securities research information, investor education, and data retrieval only. It **does not constitute investment advice; it does not recommend stocks, predict price levels, promise returns, or trade on your behalf.** For specific investment decisions, consult a licensed investment advisor and judge independently based on your own risk tolerance.
