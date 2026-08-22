@@ -1,19 +1,19 @@
 """
-亮点：多 Agent 路由与编排
+Highlight: multi-agent routing and orchestration.
 
-核心问题：多 Agent 情况下如何做 Routing？
+Core problem: how to do routing across multiple agents?
 
-路由策略（三层决策）：
-  1. 意图路由 —— 根据 IntentCategory 直接映射到专属 Agent
-  2. 性能路由 —— 同类 Agent 有多个时，选成功率最高、延迟最低的
-  3. 降级路由 —— 专属 Agent 不可用时，自动降级到 MarketAgent
+Routing strategy (three layers):
+  1. Intent routing -- map IntentCategory directly to a specialized agent
+  2. Performance routing -- when a type has several instances, pick the highest success / lowest latency one
+  3. Fallback routing -- when a specialized agent is unavailable, fall back to MarketAgent
 
-并行协作：
-  - 复杂问题（如"技术问题 + 账单问题"）可同时派发给多个 Agent
-  - 结果由 Orchestrator 合并后返回
+Parallel collaboration:
+  - Complex questions can be dispatched to several agents at once
+  - The Orchestrator merges the results
 
-升级机制：
-  - Agent 置信度低于阈值 → 自动升级到更高级 Agent 或转人工
+Escalation:
+  - When an agent's confidence is below threshold, escalate to a higher agent or a human
 """
 import asyncio
 import json
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_english(text: str) -> bool:
-    """简单判定输入主要是英文还是中文,用于固定文案(护栏/澄清/错误)的语言自适应。"""
+    """Roughly detect whether the input is mainly English or Chinese, for language-adaptive fixed text (guardrail/clarification/error)."""
     if not text:
         return True
     letters = sum(1 for c in text if c.isascii() and c.isalpha())
@@ -41,18 +41,18 @@ def _is_english(text: str) -> bool:
     return letters >= cjk
 
 
-# ── 数据结构 ──────────────────────────────────────────────────────────────────
+# ── Data structures ──────────────────────────────────────────────────────────
 
 class AgentType(Enum):
-    MARKET     = "market"      # 行情与信息
-    RESEARCH   = "research"    # 投研与分析
-    COMPLIANCE = "compliance"  # 合规与适当性
-    ESCALATION = "escalation"  # 人工投顾升级
+    MARKET     = "market"      # Market & Information
+    RESEARCH   = "research"    # Research & Analysis
+    COMPLIANCE = "compliance"  # Compliance & Suitability
+    ESCALATION = "escalation"  # human advisor escalation
 
 
 @dataclass
 class AgentStats:
-    """Agent 运行时统计，供 Monitor 和路由决策使用。"""
+    """Agent runtime stats, used by Monitor and routing decisions."""
     total:     int   = 0
     success:   int   = 0
     total_ms:  float = 0.0
@@ -67,7 +67,7 @@ class AgentStats:
         return self.total_ms / self.total if self.total else 0.0
 
     def routing_score(self) -> float:
-        """路由评分：成功率高、延迟低的 Agent 得分高。"""
+        """Routing score: agents with higher success rate and lower latency score higher."""
         latency_score = 1.0 / (1.0 + self.avg_ms / 1000)
         base_score = self.success_rate * 0.7 + latency_score * 0.3
         return base_score * max(0.0, 1.0 - self.monitor_penalty)
@@ -80,7 +80,7 @@ class AgentResponse:
     success:     bool
     confidence:  float = 1.0
     latency_ms:  float = 0.0
-    escalate:    bool  = False   # 是否需要升级
+    escalate:    bool  = False   # whether escalation is needed
 
 
 @dataclass
@@ -88,8 +88,8 @@ class Request:
     message:     str
     user_id:     str
     conv_id:     str
-    context:     str = ""        # 来自 MemoryManager 的格式化上下文
-    history:     Optional[List[Dict[str, str]]] = None  # 对话历史，传给意图识别
+    context:     str = ""        # formatted context from MemoryManager
+    history:     Optional[List[Dict[str, str]]] = None  # conversation history, passed to intent recognition
     entities:    Dict[str, List[str]] = field(default_factory=dict)
     intent:      Optional[IntentCategory] = None
     intent_group: Optional[str] = None
@@ -115,7 +115,7 @@ class OrchestratorResult:
 
 @dataclass
 class RoutingDecision:
-    """一次请求的结构化路由决策。"""
+    """Structured routing decision for one request."""
     primary_agent: AgentType
     supporting_agents: List[AgentType] = field(default_factory=list)
     reason: str = ""
@@ -130,10 +130,10 @@ class RoutingDecision:
         return bool(self.supporting_agents)
 
 
-# ── 基础 Agent ────────────────────────────────────────────────────────────────
+# ── Base agent ───────────────────────────────────────────────────────────────
 
 class BaseAgent:
-    """所有 Agent 的基类，封装 LLM 调用和统计。"""
+    """Base class for all agents; wraps LLM calls and stats."""
 
     agent_type: AgentType
     system_prompt: str
@@ -163,7 +163,7 @@ class BaseAgent:
         except Exception as ex:
             ms = (time.monotonic() - t0) * 1000
             self.stats.total_ms += ms
-            logger.error(f"{self.agent_type.value} 处理失败: {ex}")
+            logger.error(f"{self.agent_type.value} failed: {ex}")
             fallback = ("Sorry, something went wrong while handling your request. Please try again later."
                         if _is_english(req.message) else "抱歉，处理您的请求时出现问题，请稍后重试。")
             return AgentResponse(
@@ -195,11 +195,11 @@ class BaseAgent:
         )
         return extract_text_content(resp.content)
 
-    # 让回复语言跟随用户提问语言,同时保持内容(prompt/知识库)为英文。
+    # Make replies follow the user's language while keeping content (prompts/knowledge) in English.
     _LANG_DIRECTIVE = "\n\nAlways respond in the same language as the user's latest message (Chinese or English)."
 
     def _build_system_prompt(self, req: Request) -> str:
-        """把动态加载的 Skills 拼入 system prompt，让业务规则随请求生效。"""
+        """Splice dynamically loaded Skills into the system prompt so business rules apply per request."""
         base = self.system_prompt + self._LANG_DIRECTIVE
         if self._skill_manager is None:
             return base
@@ -209,7 +209,7 @@ class BaseAgent:
         return f"{base}\n\n[Dynamic Skills]\n{skill_prompt}"
 
     def _needs_escalation(self, content: str) -> bool:
-        """检测 Agent 是否建议升级（简单关键词检测）。"""
+        """Detect whether the agent suggests escalation (simple keyword check)."""
         keywords = ["转人工", "人工投顾", "投资顾问", "无法处理",
                     "escalate", "human advisor", "investment advisor", "cannot handle"]
         return any(kw in content for kw in keywords)
@@ -250,19 +250,19 @@ class ComplianceAgent(BaseAgent):
     )
 
 
-# ── 编排器 ────────────────────────────────────────────────────────────────────
+# ── Orchestrator ─────────────────────────────────────────────────────────────
 
 class AgentOrchestrator:
     """
-    多 Agent 编排器。
+    Multi-agent orchestrator.
 
-    路由逻辑（三层）：
-      1. 意图 → Agent 类型映射
-      2. 同类多实例时按 routing_score() 选最优
-      3. 专属 Agent 失败时降级到 MarketAgent
+    Routing logic (three layers):
+      1. intent -> agent-type mapping
+      2. pick the best instance by routing_score() when a type has several
+      3. fall back to MarketAgent when the specialized agent fails
     """
 
-    # 意图 → Agent 类型的静态映射（路由表）
+    # static intent -> agent-type mapping (routing table)
     _INTENT_ROUTING: Dict[IntentCategory, AgentType] = {
         IntentCategory.RESEARCH_REPORT: AgentType.RESEARCH,
         IntentCategory.FUNDAMENTAL:     AgentType.RESEARCH,
@@ -276,7 +276,7 @@ class AgentOrchestrator:
         IntentCategory.STATEMENT:       AgentType.COMPLIANCE,
         IntentCategory.ESCALATION:      AgentType.ESCALATION,
         IntentCategory.HUMAN_HANDOFF:   AgentType.ESCALATION,
-        # market 组及其余意图 → MARKET（默认）
+        # market group and all other intents -> MARKET (default)
     }
 
     def __init__(
@@ -294,7 +294,7 @@ class AgentOrchestrator:
         self._intent_recognizer = IntentRecognizer(api_key=api_key, base_url=base_url, model=model)
         self._skill_manager = skill_manager
 
-        # Agent 池：每种类型可有多个实例（水平扩展）
+        # agent pool: each type may have several instances (horizontal scaling)
         self._pool: Dict[AgentType, List[BaseAgent]] = {
             AgentType.MARKET:     [MarketAgent(client, model, skill_manager)],
             AgentType.RESEARCH:   [ResearchAgent(client, model, skill_manager)],
@@ -302,7 +302,7 @@ class AgentOrchestrator:
         }
 
     def set_skill_manager(self, skill_manager: Optional[Any]) -> None:
-        """更新 SkillManager 引用，供运行时重载或测试替换使用。"""
+        """Update the SkillManager reference, for runtime reload or test replacement."""
         self._skill_manager = skill_manager
         for agents in self._pool.values():
             for agent in agents:
@@ -313,19 +313,19 @@ class AgentOrchestrator:
         message: str,
         history: Optional[List[Dict[str, str]]] = None,
     ):
-        """对外暴露意图识别，供 API 层先判断是否需要 RAG 等前置能力。"""
+        """Expose intent recognition so the API layer can decide on RAG etc. beforehand."""
         return await self._intent_recognizer.recognize(message, history=history)
 
-    # ── 主入口 ────────────────────────────────────────────────────────────────
+    # ── Main entry ────────────────────────────────────────────────────────────
 
     async def run(self, req: Request) -> OrchestratorResult:
         """
-        处理一次请求的完整流程：
-          意图识别 → 路由选 Agent → 执行 → 检查升级 → 返回结果
+        Full pipeline for one request:
+          intent recognition -> route to agent -> execute -> check escalation -> return result
         """
         t0 = time.monotonic()
 
-        # 1. 意图识别（如果调用方已识别则跳过）
+        # 1. intent recognition (skip if the caller already provided it)
         if req.intent is None:
             intent_result = await self._intent_recognizer.recognize(req.message, history=req.history)
             req.intent  = intent_result.intent
@@ -333,9 +333,9 @@ class AgentOrchestrator:
             req.urgency = intent_result.urgency
             req.intent_confidence = intent_result.confidence
 
-        # 2. 投资建议护栏:命中荐股/择时/保收益/代客请求 → 拦截并升级,不进入正常回答
+        # 2. investment-advice guardrail: intercept & escalate stock-pick/timing/guaranteed-return/trade-for-me requests
         if self._needs_guardrail(req):
-            logger.info(f"请求 {req.request_id} 命中投资建议护栏")
+            logger.info(f"request {req.request_id} hit the investment-advice guardrail")
             return self._guardrail_response(req, (time.monotonic() - t0) * 1000)
 
         if self._needs_clarification(req):
@@ -356,23 +356,23 @@ class AgentOrchestrator:
                 routing_confidence=req.intent_confidence,
             )
 
-        # 复杂问题自动并行协作，例如同一句同时涉及研报/估值分析和适当性/风险等级。
+        # Auto parallel collaboration for complex questions, e.g. one message about research/valuation and suitability/risk-rating.
         decision = self._route_decision(req)
         if decision.multi_agent:
             return await self.run_parallel(req, decision)
 
-        # 2. 执行主 Agent（含降级）
+        # 2. execute the primary agent (with fallback)
         response = await self._execute(req, decision.primary_agent)
 
-        # 4. 升级检查
+        # 4. escalation check
         escalated = False
         if response.escalate or req.urgency == UrgencyLevel.CRITICAL or req.intent in (
             IntentCategory.ESCALATION,
             IntentCategory.HUMAN_HANDOFF,
         ):
             escalated = True
-            logger.warning(f"请求 {req.request_id} 触发升级: urgency={req.urgency}")
-            # 生产环境：此处创建工单、转接人工投顾/合规
+            logger.warning(f"request {req.request_id} triggered escalation: urgency={req.urgency}")
+            # production: create a ticket / hand off to a human advisor / compliance here
 
         return OrchestratorResult(
             request_id=req.request_id,
@@ -390,15 +390,15 @@ class AgentOrchestrator:
 
     async def run_parallel(self, req: Request, decision: RoutingDecision) -> OrchestratorResult:
         """
-        并行派发给多个 Agent，合并结果。
-        适用于复杂问题（如同时涉及技术和账单）。
+        Dispatch to several agents in parallel and merge the results.
+        For complex questions spanning multiple domains.
         """
         t0 = time.monotonic()
         agent_types = decision.agent_types
         tasks = [self._execute(req, at) for at in agent_types]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 合并：主 Agent 在前，辅助 Agent 在后。
+        # merge: primary agent first, supporting agents after.
         parts = []
         for r in responses:
             if isinstance(r, AgentResponse) and r.success:
@@ -429,21 +429,21 @@ class AgentOrchestrator:
             routing_confidence=decision.confidence,
         )
 
-    # ── 路由逻辑 ──────────────────────────────────────────────────────────────
+    # ── Routing logic ─────────────────────────────────────────────────────────
 
     def _route(self, intent: Optional[IntentCategory], urgency: Optional[UrgencyLevel]) -> AgentType:
         """
-        三层路由决策：
-          1. 意图映射
-          2. 紧急度覆盖（CRITICAL 直接升级）
-          3. 默认 GENERAL
+        Three-layer routing decision:
+          1. intent mapping
+          2. urgency override (CRITICAL escalates directly)
+          3. default MARKET
         """
         if urgency == UrgencyLevel.CRITICAL:
             return AgentType.ESCALATION
 
         if intent and intent in self._INTENT_ROUTING:
             target = self._INTENT_ROUTING[intent]
-            # 如果目标类型有可用实例则使用，否则降级
+            # use the target type if it has an available instance, otherwise fall back
             if target in self._pool and self._pool[target]:
                 return target
 
@@ -451,10 +451,10 @@ class AgentOrchestrator:
 
     def _route_decision(self, req: Request) -> RoutingDecision:
         """
-        结构化路由决策。
+        Structured routing decision.
 
-        先处理紧急/转人工，再用领域分数决定主 Agent 和辅助 Agent。
-        这样可以表达“主处理 + 辅助诊断”，避免关键词命中后无主次地拼接。
+        Handle urgency / human handoff first, then use domain scores to pick primary and supporting agents.
+        This expresses "primary handling + supporting diagnosis" instead of concatenating on keyword hits.
         """
         if req.urgency == UrgencyLevel.CRITICAL:
             return RoutingDecision(
@@ -500,7 +500,7 @@ class AgentOrchestrator:
         )
 
     def _domain_scores(self, req: Request) -> Dict[AgentType, float]:
-        """按意图、关键词和实体为各领域 Agent 打分。"""
+        """Score each domain agent by intent, keywords and entities."""
         msg = req.message.lower()
         scores = {
             AgentType.MARKET: 0.1,
@@ -580,10 +580,10 @@ class AgentOrchestrator:
 
     def _collaboration_targets(self, req: Request) -> List[AgentType]:
         """
-        判断是否需要多个 Agent 并行协作。
+        Decide whether several agents should collaborate in parallel.
 
-        意图识别通常只返回一个主意图；这里用领域关键词补充检测复合问题，
-        例如"登录报错且被重复扣款"需要技术和账单 Agent 同时处理。
+        Intent recognition usually returns a single primary intent; here domain keywords
+        additionally detect compound questions that need two agents at once.
         """
         msg = req.message.lower()
         targets: List[AgentType] = []
@@ -608,13 +608,13 @@ class AgentOrchestrator:
         ) or any(kw in msg for kw in compliance_kws):
             targets.append(AgentType.COMPLIANCE)
 
-        # 保持顺序去重，并只返回当前有实例的 Agent 类型。
+        # dedupe preserving order, and only return agent types that currently have instances.
         deduped = list(dict.fromkeys(targets))
         return [agent_type for agent_type in deduped if self._pool.get(agent_type)]
 
     @staticmethod
     def _needs_clarification(req: Request) -> bool:
-        """低置信度且无明确意图时，先追问，避免误路由。"""
+        """When confidence is low and intent is unclear, ask first to avoid misrouting."""
         if req.intent != IntentCategory.OTHER:
             return False
         text = (req.message or "").strip()
@@ -622,14 +622,14 @@ class AgentOrchestrator:
             return False
         return req.intent_confidence < 0.5
 
-    # ── 投资建议护栏 ──────────────────────────────────────────────────────────
-    # 命中即拦截:不给出个股买卖建议、择时判断或收益承诺,改为风险揭示 + 转人工投顾。
+    # ── Investment-advice guardrail ───────────────────────────────────────────
+    # On a hit, intercept: give no individual buy/sell advice, timing calls or return promises; return a risk disclosure + human advisor.
     _GUARDRAIL_KEYWORDS = [
-        # 中文
+        # Chinese
         "推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨", "能涨到", "涨不涨",
         "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "帮我卖", "代客",
         "全仓", "梭哈", "抄底", "能不能买", "值不值得买", "要不要买",
-        # 英文
+        # English
         "recommend", "should i buy", "should i sell", "will it go up", "will it rise",
         "guaranteed", "buy for me", "sell for me", "place a buy order", "place an order",
         "trade for me", "which to buy", "what to buy", "worth buying", "all in",
@@ -637,14 +637,14 @@ class AgentOrchestrator:
     ]
 
     def _needs_guardrail(self, req: Request) -> bool:
-        """是否命中投资建议护栏:意图为 advice_request,或消息含荐股/择时/保收益/代客等关键词。"""
+        """Whether the investment-advice guardrail is hit: intent is advice_request, or the message contains stock-pick/timing/guaranteed-return/trade-for-me keywords."""
         if req.intent == IntentCategory.ADVICE_REQUEST:
             return True
         msg = (req.message or "").lower()
         return any(kw in msg for kw in self._GUARDRAIL_KEYWORDS)
 
     def _guardrail_response(self, req: Request, elapsed_ms: float) -> OrchestratorResult:
-        """护栏安全响应:合规拒答 + 风险揭示 + 升级,不进入领域 Agent 生成。语言跟随用户提问。"""
+        """Guardrail-safe response: compliant refusal + risk disclosure + escalation, bypassing domain agents. Language follows the user."""
         if _is_english(req.message):
             text = (
                 "AlphaMind provides securities research information and investor education. "
@@ -680,8 +680,8 @@ class AgentOrchestrator:
 
     def _best_agent(self, agent_type: AgentType) -> Optional[BaseAgent]:
         """
-        性能路由：从同类 Agent 中选 routing_score() 最高的。
-        这是"基于在线表现动态调整路由"的核心。
+        Performance routing: pick the highest routing_score() among same-type agents.
+        This is the core of "dynamically adjusting routing based on online performance".
         """
         agents = self._pool.get(agent_type, [])
         if not agents:
@@ -689,29 +689,30 @@ class AgentOrchestrator:
         return max(agents, key=lambda a: a.stats.routing_score())
 
     async def _execute(self, req: Request, agent_type: AgentType) -> AgentResponse:
-        """执行 Agent，失败时降级到 MarketAgent。"""
+        """Execute an agent; fall back to MarketAgent on failure."""
         agent = self._best_agent(agent_type)
         if agent is None:
             agent = self._best_agent(AgentType.MARKET)
         if agent is None:
             return AgentResponse(
                 agent_type=AgentType.MARKET,
-                content="服务暂时不可用，请稍后重试。",
+                content=("Service is temporarily unavailable, please try again later."
+                         if _is_english(req.message) else "服务暂时不可用，请稍后重试。"),
                 success=False,
             )
 
         response = await agent.handle(req)
 
-        # 专属 Agent 失败时降级到 MarketAgent
+        # fall back to MarketAgent when the specialized agent fails
         if not response.success and agent_type != AgentType.MARKET:
-            logger.warning(f"{agent_type.value} 失败，降级到 MarketAgent")
+            logger.warning(f"{agent_type.value} failed, falling back to MarketAgent")
             fallback = self._best_agent(AgentType.MARKET)
             if fallback:
                 response = await fallback.handle(req)
 
         return response
 
-    # ── 统计（供 Monitor 读取）────────────────────────────────────────────────
+    # ── Stats (read by Monitor) ───────────────────────────────────────────────
 
     def get_stats(self) -> Dict[str, Any]:
         result = {}
@@ -729,9 +730,9 @@ class AgentOrchestrator:
 
     def update_routing_penalties(self, penalties: Dict[str, float]) -> None:
         """
-        接收 Monitor 的在线表现反馈，动态调整路由惩罚项。
+        Receive Monitor's online-performance feedback and adjust routing penalties dynamically.
 
-        penalties 的 key 使用 get_stats() 中的 agent key，例如 technical_0。
+        The keys of penalties use the agent keys from get_stats(), e.g. research_0.
         """
         for agent_type, agents in self._pool.items():
             for i, agent in enumerate(agents):

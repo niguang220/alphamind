@@ -1,13 +1,13 @@
 """
-亮点：端到端意图识别
+Highlight: end-to-end intent recognition.
 
-三路融合策略：
-  1. LLM 语义理解（权重 70%）—— 主力，理解复杂语义和上下文
-  2. Embedding 向量相似度（权重 20%）—— 快速匹配常见表达
-  3. 关键词模式匹配（权重 10%）—— 零延迟兜底
+Three-way fusion strategy:
+  1. LLM semantic understanding (weight 70%) -- main, understands complex semantics and context
+  2. Embedding similarity (weight 20%) -- fast match for common phrasings
+  3. Keyword pattern matching (weight 10%) -- zero-latency fallback
 
-三路结果通过加权投票合并，置信度低于阈值时降级为 OTHER。
-LLM 和 Embedding 并行调用，不串行等待。
+The three results are merged by weighted voting; below the confidence threshold it falls back to OTHER.
+LLM and Embedding run in parallel, not serially.
 """
 import asyncio
 import hashlib
@@ -27,30 +27,30 @@ logger = logging.getLogger(__name__)
 
 
 class IntentCategory(Enum):
-    # 行情信息组 → MARKET
-    MARKET_QUOTE    = "market_quote"      # 行情/指数/涨跌查询
-    PRODUCT_INFO    = "product_info"      # 个股/ETF/基金产品信息
-    TERM_EXPLAIN    = "term_explain"      # 术语/概念解释
-    TRADING_RULE    = "trading_rule"      # 交易规则
-    # 投研分析组 → RESEARCH
-    RESEARCH_REPORT = "research_report"   # 研报检索/摘要
-    FUNDAMENTAL     = "fundamental"       # 基本面/财报解读
-    VALUATION       = "valuation"         # 估值/财务指标
-    COMPARISON      = "comparison"        # 个股/ETF 对比
-    QUANT_CONCEPT   = "quant_concept"     # 量化/因子/回测/夏普/回撤
-    # 合规适当性组 → COMPLIANCE
-    ACCOUNT         = "account"           # 开户/账户管理
-    FUNDING         = "funding"           # 出入金/银证转账/资金流水
-    SUITABILITY     = "suitability"       # 风险测评/适当性/风险等级
-    RISK_DISCLOSURE = "risk_disclosure"   # 风险揭示
-    STATEMENT       = "statement"         # 对账单/交割单/税务
-    # 流程 / 护栏
-    ADVICE_REQUEST  = "advice_request"    # ⚠️护栏:荐股/择时/保收益/代客
-    COMPLAINT       = "complaint"         # 投诉
-    HUMAN_HANDOFF   = "human_handoff"     # 转人工投顾
-    ESCALATION      = "escalation"        # 升级
-    GREETING        = "greeting"          # 问候
-    FEEDBACK        = "feedback"          # 正面反馈
+    # Market group -> MARKET
+    MARKET_QUOTE    = "market_quote"      # quotes/indices/price moves
+    PRODUCT_INFO    = "product_info"      # stock/ETF/fund product info
+    TERM_EXPLAIN    = "term_explain"      # term/concept explanation
+    TRADING_RULE    = "trading_rule"      # trading rules
+    # Research group -> RESEARCH
+    RESEARCH_REPORT = "research_report"   # research report retrieval/summary
+    FUNDAMENTAL     = "fundamental"       # fundamentals/financials interpretation
+    VALUATION       = "valuation"         # valuation/financial metrics
+    COMPARISON      = "comparison"        # stock/ETF comparison
+    QUANT_CONCEPT   = "quant_concept"     # quant/factor/backtest/Sharpe/drawdown
+    # Compliance group -> COMPLIANCE
+    ACCOUNT         = "account"           # account opening/management
+    FUNDING         = "funding"           # deposit/withdrawal/bank-securities transfer/cash flow
+    SUITABILITY     = "suitability"       # risk assessment/suitability/risk rating
+    RISK_DISCLOSURE = "risk_disclosure"   # risk disclosure
+    STATEMENT       = "statement"         # statement/trade confirmation/tax
+    # Flow / guardrail
+    ADVICE_REQUEST  = "advice_request"    # (guardrail) stock picks/timing/guaranteed returns/trade-for-me
+    COMPLAINT       = "complaint"         # complaint
+    HUMAN_HANDOFF   = "human_handoff"     # human advisor handoff
+    ESCALATION      = "escalation"        # escalation
+    GREETING        = "greeting"          # greeting
+    FEEDBACK        = "feedback"          # positive feedback
     OTHER           = "other"
 
 
@@ -67,13 +67,13 @@ class IntentResult:
     confidence: float
     urgency:    UrgencyLevel
     intent_group: str
-    entities:   Dict[str, List[str]]   # 从消息中提取的实体
+    entities:   Dict[str, List[str]]   # entities extracted from the message
     reasoning:  str
     latency_ms: float
     source_scores: Dict[str, float] = field(default_factory=dict)
 
 
-# ── Few-shot 模板（同时用于 LLM 示例和 Embedding 匹配）────────────────────────
+# ── Few-shot templates (used for both LLM examples and Embedding matching) ────
 _TEMPLATES: Dict[IntentCategory, List[str]] = {
     IntentCategory.MARKET_QUOTE:    ["What's the CSI 300 index at today", "current price of the stock", "did ChiNext go up"],
     IntentCategory.PRODUCT_INFO:    ["what is the fee of this ETF", "what index does this ETF track", "top holdings of the fund"],
@@ -113,7 +113,7 @@ _GENERIC_INTENTS = {
     IntentCategory.FEEDBACK,
 }
 
-# 意图 → 分组字符串(market / research / compliance / escalation)
+# intent -> group string (market / research / compliance / escalation)
 _INTENT_GROUPS: Dict[IntentCategory, str] = {
     IntentCategory.MARKET_QUOTE: "market",
     IntentCategory.PRODUCT_INFO: "market",
@@ -135,7 +135,7 @@ _INTENT_GROUPS: Dict[IntentCategory, str] = {
     IntentCategory.ESCALATION: "escalation",
 }
 
-# 紧急关键词
+# urgency keywords
 _URGENCY_KEYWORDS = {
     UrgencyLevel.CRITICAL: ["紧急", "emergency", "urgent", "asap", "立刻", "爆仓", "强平", "被盗", "资金异常"],
     UrgencyLevel.HIGH:     ["今天", "马上", "尽快", "hurry", "now"],
@@ -144,7 +144,7 @@ _URGENCY_KEYWORDS = {
 
 
 def _cosine(a: List[float], b: List[float]) -> float:
-    """纯 Python 余弦相似度，不依赖 numpy。"""
+    """Pure-Python cosine similarity, no numpy dependency."""
     dot = sum(x * y for x, y in zip(a, b))
     na  = sum(x * x for x in a) ** 0.5
     nb  = sum(x * x for x in b) ** 0.5
@@ -153,10 +153,10 @@ def _cosine(a: List[float], b: List[float]) -> float:
 
 class IntentRecognizer:
     """
-    端到端意图识别器。
+    End-to-end intent recognizer.
 
-    初始化时不加载任何本地模型，所有 AI 能力通过 Anthropic API 调用。
-    模板 Embedding 在首次请求时懒加载并缓存，后续复用。
+    No local model is loaded at init; all AI capability goes through the Anthropic API.
+    Template embeddings are lazy-loaded and cached on first request, then reused.
     """
 
     def __init__(
@@ -172,9 +172,9 @@ class IntentRecognizer:
         self.client    = AsyncAnthropic(**kwargs)
         self.model     = model
         self.threshold = confidence_threshold
-        # 第三方兼容 API（如 DeepSeek）通常不支持 Embedding，禁用该策略。
-        # 官方 Anthropic SDK 当前没有 embeddings 资源，因此下面会使用稳定的
-        # 本地字符 n-gram 向量作为轻量兜底，保证三路融合链路真实可跑。
+        # Third-party compatible APIs (e.g. DeepSeek) usually lack Embedding, so disable that path.
+        # The official Anthropic SDK currently has no embeddings resource, so a stable
+        # local char n-gram vector is used as a lightweight fallback so the three-way fusion still runs.
         self._embedding_enabled = not bool(base_url)
 
         self._tpl_embeddings: Dict[IntentCategory, List[List[float]]] = {}
@@ -182,7 +182,7 @@ class IntentRecognizer:
         self.cache_hits   = 0
         self.cache_misses = 0
 
-    # ── 公开接口 ──────────────────────────────────────────────────────────────
+    # ── Public API ────────────────────────────────────────────────────────────
 
     async def recognize(
         self,
@@ -190,9 +190,9 @@ class IntentRecognizer:
         history: Optional[List[Dict[str, str]]] = None,
     ) -> IntentResult:
         """
-        识别用户意图。
+        Recognize the user's intent.
 
-        history 格式：[{"role": "user"/"assistant", "content": "..."}]
+        history format: [{"role": "user"/"assistant", "content": "..."}]
         """
         key = self._cache_key(message, history)
         if key in self._cache:
@@ -202,7 +202,7 @@ class IntentRecognizer:
 
         t0 = time.monotonic()
 
-        # LLM 和 Embedding 并行（Embedding 不可用时跳过）
+        # LLM and Embedding in parallel (skip Embedding when unavailable)
         llm_task = asyncio.create_task(self._llm_recognize(message, history))
         emb_task = asyncio.create_task(self._embedding_recognize(message)) if self._embedding_enabled else None
         pat      = self._pattern_recognize(message)
@@ -228,7 +228,7 @@ class IntentRecognizer:
             source_scores=source_scores,
         )
 
-        # LRU 缓存
+        # LRU cache
         if len(self._cache) >= 1000:
             for k in list(self._cache)[:500]:
                 del self._cache[k]
@@ -236,29 +236,29 @@ class IntentRecognizer:
         return result
 
     def learn(self, message: str, correct: IntentCategory) -> None:
-        """在线学习：将纠正样本加入模板，清除对应 Embedding 缓存。"""
+        """Online learning: add a corrected sample to templates and clear its Embedding cache."""
         tpls = _TEMPLATES.setdefault(correct, [])
         if message not in tpls:
             tpls.append(message)
-            self._tpl_embeddings.pop(correct, None)  # 下次重新计算
-            logger.info(f"学习新样本 → {correct.value}: {message[:40]}")
+            self._tpl_embeddings.pop(correct, None)  # recompute next time
+            logger.info(f"learned new sample -> {correct.value}: {message[:40]}")
 
-    # ── 三路识别策略 ──────────────────────────────────────────────────────────
+    # ── Three recognition strategies ──────────────────────────────────────────
 
     async def _llm_recognize(
         self,
         message: str,
         history: Optional[List[Dict[str, str]]],
     ) -> Dict[str, Any]:
-        """策略 1：LLM 语义理解（Few-shot + 上下文）。"""
+        """Strategy 1: LLM semantic understanding (few-shot + context)."""
         message = self._clean_text(message)
-        # 构建 Few-shot 示例
+        # build few-shot examples
         examples = "\n".join(
             f'  message: "{t}" -> intent: {cat.value}'
             for cat, tpls in _TEMPLATES.items()
-            for t in tpls[:1]  # 每类取 1 条，控制 prompt 长度
+            for t in tpls[:1]  # one per category to keep the prompt short
         )
-        # 最近 3 轮对话上下文
+        # last 3 turns of context
         ctx = ""
         if history:
             ctx = "\nRecent conversation:\n" + "\n".join(
@@ -299,11 +299,11 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
                 data["intent"] = IntentCategory.OTHER
             return data
         except Exception as ex:
-            logger.warning(f"LLM 识别失败: {ex}")
-            return {"intent": IntentCategory.OTHER, "confidence": 0.0, "reasoning": "LLM 失败", "failed": True}
+            logger.warning(f"LLM recognition failed: {ex}")
+            return {"intent": IntentCategory.OTHER, "confidence": 0.0, "reasoning": "LLM failed", "failed": True}
 
     async def _embedding_recognize(self, message: str) -> Dict[str, Any]:
-        """策略 2：Embedding 向量相似度匹配。"""
+        """Strategy 2: Embedding similarity matching."""
         try:
             await self._load_template_embeddings()
             msg_vec = await self._embed_text(message)
@@ -316,13 +316,13 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
 
             return {"intent": best_cat, "confidence": best_score}
         except Exception as ex:
-            logger.warning(f"Embedding 识别失败: {ex}")
+            logger.warning(f"Embedding recognition failed: {ex}")
             return {"intent": IntentCategory.OTHER, "confidence": 0.0}
 
     def _pattern_recognize(self, message: str) -> Dict[str, Any]:
-        """策略 3：关键词模式匹配（同步，零延迟兜底）。"""
+        """Strategy 3: keyword pattern matching (synchronous, zero-latency fallback)."""
         msg = message.lower()
-        # 关键词双语:保留中文,并补英文,保证中英文输入都能命中(意图识别本身以 LLM 为主,关键词为兜底)。
+        # Bilingual keywords: keep Chinese and add English so both-language input matches (recognition is LLM-first; keywords are a fallback).
         specific_patterns = {
             IntentCategory.ADVICE_REQUEST: ["推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨",
                 "能涨到", "涨不涨", "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "代客", "全仓", "梭哈", "抄底",
@@ -373,10 +373,10 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
         best_cat, best_score = self._best_pattern_match(msg, generic_patterns)
         return {"intent": best_cat, "confidence": best_score}
 
-    # ── 投票合并 ──────────────────────────────────────────────────────────────
+    # ── Vote merge ────────────────────────────────────────────────────────────
 
     def _vote(self, llm: Dict, emb: Dict, pat: Dict) -> tuple[IntentCategory, float, Dict[str, float]]:
-        """加权投票。返回最终意图、融合置信度和各路来源得分。"""
+        """Weighted voting. Returns the final intent, fused confidence, and per-source scores."""
         source_scores = {
             "llm": float(llm.get("confidence", 0.0) or 0.0),
             "embedding": float(emb.get("confidence", 0.0) or 0.0),
@@ -410,13 +410,13 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
             return IntentCategory.OTHER, best_score, source_scores
         return best, best_score, source_scores
 
-    # ── 实体提取 ──────────────────────────────────────────────────────────────
+    # ── Entity extraction ─────────────────────────────────────────────────────
 
     def _extract_entities(self, message: str) -> Dict[str, List[str]]:
-        """用规则提取高价值实体，避免每次识别都额外调用 LLM。"""
+        """Extract high-value entities by rules to avoid an extra LLM call each time."""
         message = self._clean_text(message)
-        # 说明:中文字符在 Python re 中属于 \w,因此不能依赖 \b 做左边界
-        # (如 "级R3" 中 级 与 R 之间无 \b)。这里改用 lookaround 保证在中文旁也能命中。
+        # Note: Chinese chars are \w in Python re, so we cannot rely on \b for the left boundary
+        # (e.g. no \b between the Chinese char and R in "级R3"); use lookaround so it matches next to Chinese too.
         return {
             "ticker": self._unique(re.findall(r"(?<![A-Za-z0-9])(\d{6}|[A-Z]{2,5})(?![A-Za-z0-9])", message)),
             "metric": self._unique(re.findall(
@@ -429,10 +429,10 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
             "date": self._unique(re.findall(r"(今天|明天|昨天|本周|这周|下周|今年|去年|\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", message)),
         }
 
-    # ── 辅助 ──────────────────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     async def _load_template_embeddings(self) -> None:
-        """懒加载所有模板的 Embedding（只在首次调用时执行）。"""
+        """Lazy-load embeddings for all templates (only on first call)."""
         missing = [cat for cat in _TEMPLATES if cat not in self._tpl_embeddings]
         if not missing:
             return
@@ -447,11 +447,11 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
 
     async def _embed_text(self, text: str) -> List[float]:
         """
-        生成文本向量。
+        Generate a text vector.
 
-        如果未来接入的官方/兼容客户端提供 embeddings.create，会优先使用远端向量；
-        当前 Anthropic SDK 没有该资源时，退化为字符 n-gram 哈希向量。这样不会因为
-        Embedding 服务缺失导致三路融合中断。
+        If a future official/compatible client provides embeddings.create, remote vectors are preferred;
+        when the current Anthropic SDK lacks that resource, it degrades to a char n-gram hash vector,
+        so a missing Embedding service does not break the three-way fusion.
         """
         embeddings = getattr(self.client, "embeddings", None)
         if embeddings is not None:
@@ -459,13 +459,13 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
                 resp = await embeddings.create(model="voyage-3-lite", input=[text])
                 return list(resp.data[0].embedding)
             except Exception as ex:
-                logger.warning(f"远端 Embedding 失败，使用本地向量兜底: {ex}")
+                logger.warning(f"remote Embedding failed, using local vector fallback: {ex}")
 
         return self._local_embedding(text)
 
     @staticmethod
     def _local_embedding(text: str, dims: int = 256) -> List[float]:
-        """稳定的字符 n-gram 哈希向量，用于无远端 Embedding 时的语义近似匹配。"""
+        """Stable char n-gram hash vector for approximate semantic matching without a remote Embedding."""
         normalized = text.lower().strip()
         vec = [0.0] * dims
         tokens = set()
@@ -520,7 +520,7 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
             hits = sum(1 for kw in kws if kw in message)
             if not hits:
                 continue
-            # 单个明确业务关键词就给可用置信度；多个关键词命中时提高置信度。
+            # a single clear business keyword yields usable confidence; multiple hits raise it.
             score = min(1.0, 0.5 + 0.25 * (hits - 1))
             if score > best_score:
                 best_score, best_cat = score, cat
@@ -532,7 +532,7 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
 
     @staticmethod
     def _clean_text(value: Any) -> str:
-        """移除 Unicode 代理字符，避免 HTTP 客户端编码 prompt 时崩溃。"""
+        """Strip Unicode surrogate chars so the HTTP client does not crash when encoding the prompt."""
         if value is None:
             return ""
         if not isinstance(value, str):
