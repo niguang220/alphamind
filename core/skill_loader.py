@@ -1,8 +1,8 @@
 """
-AlphaMind Skill 加载器。
+AlphaMind Skill loader.
 
-Skill 是一段可热加载的业务能力说明，用来补充 Agent 的 system prompt。
-它适合放置企业话术、处理流程、合规边界、排障 SOP 等需要运营侧快速调整的规则。
+A Skill is a hot-reloadable business-capability note that augments an agent's system prompt.
+It suits business phrasing, handling flows, compliance limits and SOPs that operations may adjust quickly.
 """
 import json
 import logging
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Skill:
-    """单个 Skill 的标准化表示，屏蔽 Markdown/JSON 等不同文件格式差异。"""
+    """Normalized representation of one Skill, hiding Markdown/JSON file-format differences."""
     name: str
     description: str
     content: str
@@ -26,10 +26,10 @@ class Skill:
 
     def matches(self, message: str, agent_type: Optional[str] = None) -> bool:
         """
-        判断当前请求是否应该注入这个 Skill。
+        Decide whether this Skill should be injected for the current request.
 
-        - agents 为空：适用于所有 Agent；否则只匹配指定 Agent。
-        - keywords 为空：作为全局 Skill 注入；否则只有命中关键词才注入。
+        - agents empty: applies to all agents; otherwise only the specified agents.
+        - keywords empty: injected as a global Skill; otherwise only when a keyword matches.
         """
         if not self.enabled:
             return False
@@ -44,15 +44,15 @@ class Skill:
         return any(keyword.lower() in lowered for keyword in self.keywords)
 
     def to_prompt_block(self, max_chars: int = 3200) -> str:
-        """格式化为可直接拼入 system prompt 的文本块，并限制单个 Skill 长度。"""
+        """Format as a text block ready to splice into the system prompt, capping a single Skill's length."""
         body = self.content.strip()
         if len(body) > max_chars:
             body = body[:max_chars].rstrip() + "\n..."
-        description = f"\n说明: {self.description}" if self.description else ""
+        description = f"\nDescription: {self.description}" if self.description else ""
         return f"### {self.name}{description}\n{body}"
 
     def to_summary(self) -> Dict[str, Any]:
-        """返回 API 可序列化摘要，避免把完整长文本默认暴露给健康检查。"""
+        """Return an API-serializable summary, avoiding exposing the full long text by default."""
         return {
             "name": self.name,
             "description": self.description,
@@ -66,9 +66,9 @@ class Skill:
 
 class SkillManager:
     """
-    从目录中发现、解析并管理 Skills。
+    Discover, parse and manage Skills from a directory.
 
-    支持两种常用结构：
+    Supports two common layouts:
       1. skills/refund/SKILL.md
       2. skills/refund.json / skills/refund.md / skills/refund.txt
     """
@@ -90,12 +90,12 @@ class SkillManager:
         return list(self._errors)
 
     def load(self) -> List[Skill]:
-        """重新扫描目录并加载 Skills；单个文件失败不会影响其他 Skill 生效。"""
+        """Rescan the directory and load Skills; one bad file does not affect the others."""
         loaded: List[Skill] = []
         errors: List[str] = []
 
         if not self.root_dir.exists():
-            logger.info(f"Skill 目录不存在，跳过加载: {self.root_dir}")
+            logger.info(f"Skill directory missing, skipping load: {self.root_dir}")
             self._skills = []
             self._errors = []
             return []
@@ -108,7 +108,7 @@ class SkillManager:
             except Exception as ex:
                 msg = f"{path}: {ex}"
                 errors.append(msg)
-                logger.warning(f"Skill 加载失败: {msg}")
+                logger.warning(f"Skill load failed: {msg}")
 
         self._skills = loaded
         self._errors = errors
@@ -116,14 +116,14 @@ class SkillManager:
         return self.skills
 
     def reload(self) -> List[Skill]:
-        """运行时热加载入口，供 API 调用。"""
+        """Runtime hot-reload entry, called by the API."""
         return self.load()
 
     def prompt_for(self, message: str, agent_type: Optional[str] = None) -> str:
         """
-        为当前用户请求构建 Skill prompt。
+        Build the Skill prompt for the current request.
 
-        只注入匹配的 Skill，并按总长度截断，避免挤占主对话上下文。
+        Inject only matching Skills and truncate by total length to avoid crowding the main context.
         """
         blocks: List[str] = []
         matched: List[tuple[Skill, List[str]]] = []
@@ -148,7 +148,7 @@ class SkillManager:
 
         if not blocks:
             logger.debug(
-                "Skills 未命中: agent=%s message=%r",
+                "Skills no match: agent=%s message=%r",
                 agent_type or "all",
                 (message or "")[:80],
             )
@@ -159,20 +159,20 @@ class SkillManager:
             for skill, keywords in matched
         )
         logger.info(
-            "Skills 已注入: agent=%s matched=%s message=%r",
+            "Skills injected: agent=%s matched=%s message=%r",
             agent_type or "all",
             detail,
             (message or "")[:80],
         )
 
         return (
-            "以下是当前请求可用的 AlphaMind Skills。"
-            "请优先遵循这些业务规则；如果与系统角色冲突，以系统角色和安全边界为准。\n\n"
+            "The following AlphaMind Skills are available for this request. "
+            "Follow these business rules first; if they conflict with the system role, the system role and safety limits take precedence.\n\n"
             + "\n\n".join(blocks)
         )
 
     def summary(self) -> Dict[str, Any]:
-        """返回 Skill 管理器状态，用于 /skills 接口和排障。"""
+        """Return SkillManager state, for the /skills endpoint and debugging."""
         return {
             "root_dir": str(self.root_dir),
             "count": len(self._skills),
@@ -181,12 +181,12 @@ class SkillManager:
         }
 
     def _log_loaded_skills(self) -> None:
-        """在控制台输出醒目的 Skill 加载结果，方便启动和热加载时确认生效状态。"""
+        """Print a prominent Skill-load result to the console, for startup and hot-reload confirmation."""
         lines = [
             "",
             "================ AlphaMind Skills Loaded ================",
-            f"目录: {self.root_dir}",
-            f"数量: {len(self._skills)}",
+            f"Directory: {self.root_dir}",
+            f"Count: {len(self._skills)}",
         ]
 
         if self._skills:
@@ -202,17 +202,17 @@ class SkillManager:
                     f"   path: {skill.path}",
                 ])
         else:
-            lines.append("未加载任何 Skill。")
+            lines.append("No Skills loaded.")
 
         if self._errors:
-            lines.append("解析错误:")
+            lines.append("Parse errors:")
             lines.extend(f"  - {error}" for error in self._errors)
 
         lines.append("========================================================")
         logger.info("\n".join(lines))
 
     def _discover_files(self, root_dir: Path) -> Iterable[Path]:
-        """发现可加载文件，优先读取目录规范文件 SKILL.md。"""
+        """Discover loadable files, preferring the directory-standard SKILL.md."""
         skill_md_files = sorted(root_dir.rglob("SKILL.md"))
         yielded = {path.resolve() for path in skill_md_files}
         for path in skill_md_files:
@@ -235,11 +235,11 @@ class SkillManager:
     def _load_json(self, path: Path) -> Optional[Skill]:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            raise ValueError("JSON Skill 必须是对象格式")
+            raise ValueError("JSON Skill must be an object")
 
         content = str(raw.get("content") or raw.get("instructions") or "").strip()
         if not content:
-            raise ValueError("缺少 content 或 instructions")
+            raise ValueError("missing content or instructions")
 
         return Skill(
             name=str(raw.get("name") or path.stem),
@@ -261,7 +261,7 @@ class SkillManager:
         default_name = path.parent.name if path.name == "SKILL.md" else path.stem
         name = str(meta.get("name") or self._first_heading(body) or default_name)
 
-        # 如果首行标题只是 Skill 名称，注入 prompt 时去掉它，减少重复噪音。
+        # If the first-line heading is just the Skill name, drop it when injecting to reduce noise.
         body = self._strip_first_heading(body, name)
 
         return Skill(
@@ -276,9 +276,9 @@ class SkillManager:
 
     def _split_front_matter(self, raw: str) -> tuple[Dict[str, Any], str]:
         """
-        解析 Markdown 顶部的简单 front matter。
+        Parse the simple front matter at the top of the Markdown.
 
-        这里刻意不用 PyYAML，避免为一个轻量配置格式新增运行时依赖。
+        Deliberately avoids PyYAML so a lightweight config format adds no runtime dependency.
         """
         text = raw.lstrip()
         if not text.startswith("---"):
