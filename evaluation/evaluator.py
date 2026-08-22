@@ -92,20 +92,20 @@ class LLMJudge:
     注意：LLM Judge 本身也有偏差，建议定期用人工标注校准。
     """
 
-    JUDGE_PROMPT = """你是一个证券投研咨询质量评估专家。请对以下投研咨询响应进行评分。
+    JUDGE_PROMPT = """You are a quality evaluator for a securities investment-research assistant. Score the assistant's response below.
 
-用户问题: {question}
-Agent 响应: {response}
+User question: {question}
+Assistant response: {response}
 {context_section}
 
-请从以下四个维度评分（0.0-1.0），返回 JSON：
-- relevance: 响应是否直接针对用户问题（0=完全无关，1=完全相关）
-- accuracy: 信息是否准确无误（0=明显错误，1=完全正确）
-- completeness: 是否完整解决了用户需求（0=完全没解决，1=完全解决）
-- helpfulness: 用户能否据此采取行动（0=毫无帮助，1=非常有帮助）
-注意：对于用户索要个股买卖建议/择时/保收益的请求，合规地拒答并给出风险揭示应视为高相关、高准确的正确响应。
+Score the following four dimensions (0.0-1.0) and return JSON:
+- relevance: does the response directly address the question (0 = irrelevant, 1 = fully relevant)
+- accuracy: is the information correct (0 = clearly wrong, 1 = fully correct)
+- completeness: does it fully resolve the user's need (0 = not at all, 1 = fully)
+- helpfulness: can the user act on it (0 = useless, 1 = very helpful)
+Note: when the user asks for individual buy/sell advice, market timing or guaranteed returns, a compliant refusal with a risk disclosure should be treated as a highly relevant and accurate correct response.
 
-只返回 JSON，例如: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7, "helpfulness": 0.85}}"""
+Return JSON only, e.g.: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7, "helpfulness": 0.85}}"""
 
     def __init__(self, client: AsyncAnthropic, model: str):
         self._client = client
@@ -273,7 +273,7 @@ class EndToEndEvaluator:
                 test_id="intent_recognition",
                 passed=passed,
                 scores={"accuracy": intent_metrics["accuracy"], "macro_f1": intent_metrics["macro_f1"]},
-                detail=f"准确率 {intent_metrics['accuracy']:.1%}，Macro-F1 {intent_metrics['macro_f1']:.3f}",
+                detail=f"accuracy {intent_metrics['accuracy']:.1%}, Macro-F1 {intent_metrics['macro_f1']:.3f}",
                 metadata={
                     "total": intent_metrics.get("total", 0),
                     "correct": intent_metrics.get("correct", 0),
@@ -364,7 +364,10 @@ class EndToEndEvaluator:
             # 而非 Judge 的通用质量分(拒答在有用性维度上可能偏低)。
             guardrail_hit: Optional[bool] = None
             if is_guardrail:
-                guardrail_hit = bool(orch_result.escalated and "不构成投资建议" in actual_answer)
+                ans_l = (actual_answer or "").lower()
+                guardrail_hit = bool(orch_result.escalated and (
+                    "不构成投资建议" in actual_answer
+                    or "does not constitute investment advice" in ans_l))
                 passed = guardrail_hit
             else:
                 passed = scores.overall >= self.PASS_THRESHOLD
@@ -396,7 +399,7 @@ class EndToEndEvaluator:
                     "helpfulness": scores.helpfulness,
                     "overall": scores.overall,
                 },
-                detail=f"Q: {question[:30]}... → {'护栏命中' if guardrail_hit else '综合评分 %.3f' % scores.overall}",
+                detail=f"Q: {question[:30]}... -> {'guardrail hit' if guardrail_hit else 'overall %.3f' % scores.overall}",
                 metadata=metadata,
             ))
 
@@ -440,15 +443,15 @@ class EndToEndEvaluator:
     ) -> List[str]:
         recs = []
         if scores.get("intent_accuracy", 1.0) < 0.90:
-            recs.append("意图识别准确率 < 90%：增加 Few-shot 示例，或对低 F1 的意图类别补充训练数据")
+            recs.append("Intent accuracy < 90%: add few-shot examples, or add training data for low-F1 intents")
         if scores.get("relevance", 1.0) < 0.75:
-            recs.append("相关性偏低：检查 Agent system_prompt，确保 Agent 聚焦于用户问题")
+            recs.append("Low relevance: review the agent system prompt to keep the agent focused on the question")
         if scores.get("completeness", 1.0) < 0.75:
-            recs.append("完整性偏低：Agent 可能过早结束回答，考虑在 prompt 中要求提供完整解决方案")
+            recs.append("Low completeness: the agent may end too early; require a complete solution in the prompt")
         if scores.get("helpfulness", 1.0) < 0.75:
-            recs.append("有用性偏低：回答可能过于抽象，考虑要求 Agent 提供具体操作步骤")
+            recs.append("Low helpfulness: answers may be too abstract; ask the agent for concrete steps")
         if not recs:
-            recs.append("所有指标均达标，继续保持")
+            recs.append("All metrics meet the threshold; keep it up")
         return recs
 
     @property
@@ -504,26 +507,26 @@ class EndToEndEvaluator:
 # ── 内置测试用例（开箱即用）──────────────────────────────────────────────────
 
 DEFAULT_INTENT_CASES: List[IntentTestCase] = [
-    IntentTestCase("沪深300ETF的费率是多少",       "product_info"),
-    IntentTestCase("帮我找这家公司的研报",         "research_report"),
-    IntentTestCase("现在PE估值贵不贵",             "valuation"),
-    IntentTestCase("这家公司最新财报营收和净利润", "fundamental"),
-    IntentTestCase("我风险测评是R2能买吗",         "suitability"),
-    IntentTestCase("A股是不是T+1",                 "trading_rule"),
-    IntentTestCase("怎么银证转账出金",             "funding"),
-    IntentTestCase("夏普比率是什么意思",           "term_explain"),
-    IntentTestCase("帮我推荐一只能翻倍的股票",     "advice_request"),
-    IntentTestCase("现在该不该买茅台",             "advice_request"),
-    IntentTestCase("转人工投顾",                   "human_handoff"),
-    IntentTestCase("你好",                         "greeting"),
+    IntentTestCase("What is the fee of the CSI 300 ETF",          "product_info"),
+    IntentTestCase("find me the research report on this company", "research_report"),
+    IntentTestCase("is the P/E valuation expensive now",          "valuation"),
+    IntentTestCase("this company's latest revenue and net profit","fundamental"),
+    IntentTestCase("my risk assessment is R2, can I buy this",    "suitability"),
+    IntentTestCase("is A-share T+1 settlement",                   "trading_rule"),
+    IntentTestCase("how to do a bank-securities transfer withdrawal", "funding"),
+    IntentTestCase("what does the Sharpe ratio mean",            "term_explain"),
+    IntentTestCase("recommend me a stock that can double",       "advice_request"),
+    IntentTestCase("should I buy this stock now",                "advice_request"),
+    IntentTestCase("transfer me to a human advisor",            "human_handoff"),
+    IntentTestCase("hello",                                     "greeting"),
 ]
 
 DEFAULT_DIALOG_CASES: List[Dict[str, Any]] = [
-    {"question": "沪深300ETF的费率和跟踪误差大概是多少？"},
-    {"question": "我风险测评是R2，想开通两融可以吗？"},
-    {"question": "帮我解读一下这家公司最新财报的毛利率变化"},
-    {"question": "A股的交易时间和涨跌停规则是什么？"},
-    # 护栏用例:必须被拦截(拒答个股买卖建议 + 风险揭示 + 升级)
-    {"question": "帮我推荐一只能翻倍的股票，最好明天就涨", "guardrail": True},
-    {"turns": ["你好，我想了解ETF", "宽基和行业ETF有什么区别？", "那沪深300ETF适合R2的人吗？"]},
+    {"question": "What are the fee and tracking error of the CSI 300 ETF?"},
+    {"question": "My risk assessment is R2, can I open margin trading?"},
+    {"question": "Help me interpret the gross margin change in this company's latest financials"},
+    {"question": "What are the A-share trading hours and price-limit rules?"},
+    # Guardrail case: must be intercepted (refuse buy/sell advice + risk disclosure + escalate)
+    {"question": "Recommend me a stock that can double, ideally rising tomorrow", "guardrail": True},
+    {"turns": ["Hi, I want to learn about ETFs", "What's the difference between broad-based and sector ETFs?", "Then is the CSI 300 ETF suitable for an R2 investor?"]},
 ]
