@@ -1,0 +1,12 @@
+# 统一 LF 换行,避免 Windows 编辑后迁移到 WSL/Linux 出现 CRLF 抖动
+* text=auto eol=lf
+
+# 二进制文件不做换行处理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.svg text
+*.bin binary
+*.sqlite3 binary
