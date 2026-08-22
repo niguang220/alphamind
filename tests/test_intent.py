@@ -39,3 +39,28 @@ def test_intent_group_mapping():
     assert r._intent_group(IntentCategory.MARKET_QUOTE) == "market"
     assert r._intent_group(IntentCategory.SUITABILITY) == "compliance"
     assert r._intent_group(IntentCategory.ADVICE_REQUEST) == "escalation"
+
+
+# ── 英文输入(双语关键词)────────────────────────────────────────────────────
+
+def test_pattern_advice_request_english():
+    r = _rec()
+    for msg in ["recommend me a stock that will double", "which one should I buy now",
+                "will it go up tomorrow", "is it guaranteed to make money"]:
+        out = r._pattern_recognize(msg)
+        assert out["intent"] == IntentCategory.ADVICE_REQUEST, msg
+
+
+def test_pattern_english_research_compliance():
+    r = _rec()
+    assert r._pattern_recognize("find me the research report on this company")["intent"] == IntentCategory.RESEARCH_REPORT
+    assert r._pattern_recognize("my risk assessment is R2, can I buy this")["intent"] == IntentCategory.SUITABILITY
+
+
+def test_entities_english():
+    r = _rec()
+    e = r._extract_entities("600519 P/E is 30, my risk level R3, up 20% this year")
+    assert "600519" in e["ticker"]
+    assert any("P/E" in m.upper() for m in e["metric"])
+    assert "R3" in e["risk_level"]
+    assert any("20%" in p for p in e["percentage"])

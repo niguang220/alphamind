@@ -75,26 +75,26 @@ class IntentResult:
 
 # ── Few-shot 模板（同时用于 LLM 示例和 Embedding 匹配）────────────────────────
 _TEMPLATES: Dict[IntentCategory, List[str]] = {
-    IntentCategory.MARKET_QUOTE:    ["上证指数今天多少点", "贵州茅台现在什么价", "创业板涨了吗"],
-    IntentCategory.PRODUCT_INFO:    ["沪深300ETF的费率是多少", "这只ETF跟踪什么指数", "该基金前十大重仓股"],
-    IntentCategory.TERM_EXPLAIN:    ["市盈率是什么意思", "夏普比率怎么理解", "什么叫最大回撤"],
-    IntentCategory.TRADING_RULE:    ["A股是不是T+1", "涨跌停是多少", "交易时间几点到几点"],
-    IntentCategory.RESEARCH_REPORT: ["有没有这家公司的研报", "帮我找券商研报摘要", "最新的行业研报"],
-    IntentCategory.FUNDAMENTAL:     ["帮我看下这家公司财报", "它的营收和净利润", "毛利率怎么样"],
-    IntentCategory.VALUATION:       ["现在估值贵不贵", "PE分位数是多少", "PB和ROE怎么算"],
-    IntentCategory.COMPARISON:      ["这两只ETF哪个更好", "对比一下这两家公司", "宽基和行业ETF区别"],
-    IntentCategory.QUANT_CONCEPT:   ["动量因子是什么", "回测年化收益怎么算", "什么是最大回撤和夏普"],
-    IntentCategory.ACCOUNT:         ["怎么开户", "如何修改绑定银行卡", "怎么销户"],
-    IntentCategory.FUNDING:         ["怎么银证转账", "出金多久到账", "入金没到怎么办"],
-    IntentCategory.SUITABILITY:     ["我的风险测评是R2", "适当性怎么评估", "R3能买什么产品"],
-    IntentCategory.RISK_DISCLOSURE: ["这个产品有什么风险", "风险揭示书在哪", "杠杆有什么风险"],
-    IntentCategory.STATEMENT:       ["我的对账单在哪看", "交割单怎么下载", "交易流水导出"],
-    IntentCategory.ADVICE_REQUEST:  ["帮我推荐一只能翻倍的股票", "现在该买哪只", "明天会涨吗", "帮我下单买入", "保本吗稳赚吗"],
-    IntentCategory.COMPLAINT:       ["你们这服务太差了", "等了很久没人管", "太糟糕了"],
-    IntentCategory.HUMAN_HANDOFF:   ["转人工投顾", "我要找人工", "接投资顾问"],
-    IntentCategory.ESCALATION:      ["我要投诉", "找你们主管", "升级处理"],
-    IntentCategory.GREETING:        ["你好", "在吗", "早上好"],
-    IntentCategory.FEEDBACK:        ["讲得很清楚", "非常感谢", "点赞"],
+    IntentCategory.MARKET_QUOTE:    ["What's the CSI 300 index at today", "current price of the stock", "did ChiNext go up"],
+    IntentCategory.PRODUCT_INFO:    ["what is the fee of this ETF", "what index does this ETF track", "top holdings of the fund"],
+    IntentCategory.TERM_EXPLAIN:    ["what does P/E ratio mean", "how to understand the Sharpe ratio", "what is maximum drawdown"],
+    IntentCategory.TRADING_RULE:    ["is A-share T+1 settlement", "what is the price limit", "what are the trading hours"],
+    IntentCategory.RESEARCH_REPORT: ["is there a research report on this company", "find me a broker research summary", "latest sector research report"],
+    IntentCategory.FUNDAMENTAL:     ["help me read this company's financial report", "its revenue and net profit", "how is the gross margin"],
+    IntentCategory.VALUATION:       ["is the valuation expensive now", "what is the P/E percentile", "how to compute P/B and ROE"],
+    IntentCategory.COMPARISON:      ["which of these two ETFs is better", "compare these two companies", "difference between broad-based and sector ETF"],
+    IntentCategory.QUANT_CONCEPT:   ["what is the momentum factor", "how to compute backtest annualized return", "what are maximum drawdown and Sharpe"],
+    IntentCategory.ACCOUNT:         ["how to open an account", "how to change my linked bank card", "how to close my account"],
+    IntentCategory.FUNDING:         ["how to do a bank-securities transfer", "how long does withdrawal take", "my deposit hasn't arrived"],
+    IntentCategory.SUITABILITY:     ["my risk assessment is R2", "how is investor suitability evaluated", "what can an R3 investor buy"],
+    IntentCategory.RISK_DISCLOSURE: ["what are the risks of this product", "where is the risk disclosure", "what are the risks of leverage"],
+    IntentCategory.STATEMENT:       ["where can I see my account statement", "how to download the trade confirmation", "export my transaction records"],
+    IntentCategory.ADVICE_REQUEST:  ["recommend me a stock that can double", "which one should I buy now", "will it go up tomorrow", "place a buy order for me", "is it guaranteed to make money"],
+    IntentCategory.COMPLAINT:       ["your service is terrible", "waited a long time and no one helped", "this is awful"],
+    IntentCategory.HUMAN_HANDOFF:   ["transfer me to a human advisor", "I want a real person", "connect me to an investment advisor"],
+    IntentCategory.ESCALATION:      ["I want to file a complaint", "get me your supervisor", "escalate this"],
+    IntentCategory.GREETING:        ["hello", "hi there", "good morning"],
+    IntentCategory.FEEDBACK:        ["that was very clear", "thank you so much", "great, thumbs up"],
 }
 
 _SPECIFIC_INTENTS = {
@@ -254,33 +254,33 @@ class IntentRecognizer:
         message = self._clean_text(message)
         # 构建 Few-shot 示例
         examples = "\n".join(
-            f'  消息: "{t}" → 意图: {cat.value}'
+            f'  message: "{t}" -> intent: {cat.value}'
             for cat, tpls in _TEMPLATES.items()
             for t in tpls[:1]  # 每类取 1 条，控制 prompt 长度
         )
         # 最近 3 轮对话上下文
         ctx = ""
         if history:
-            ctx = "\n最近对话:\n" + "\n".join(
+            ctx = "\nRecent conversation:\n" + "\n".join(
                 f"  {self._clean_text(m.get('role', 'user'))}: {self._clean_text(m.get('content', ''))}"
                 for m in history[-3:]
             )
 
-        prompt = f"""你是证券投研咨询的意图分析专家。根据示例判断用户意图，返回 JSON。
-如果用户问题能匹配细粒度业务意图，请优先返回细粒度意图，而不是宽泛大类。
-例如研报检索优先返回 research_report，估值分析优先返回 valuation，风险测评/适当性优先返回 suitability；
-若用户在索要买卖建议、荐股、择时、保证收益或代客操作，请返回 advice_request。
+        prompt = f"""You are an intent classifier for a securities investment-research assistant. Classify the user's intent based on the examples and return JSON.
+Prefer the most specific business intent over a broad category.
+For example: research retrieval -> research_report, valuation analysis -> valuation, risk assessment / suitability -> suitability.
+If the user asks for buy/sell advice, stock picks, market timing, guaranteed returns, or to trade on their behalf, return advice_request.
 
-示例:
+Examples:
 {examples}
 
 {ctx}
-用户消息: "{message}"
+User message: "{message}"
 
-返回格式（仅 JSON，不要其他文字）:
-{{"intent": "<意图值>", "confidence": <0-1>, "reasoning": "<一句话说明>"}}
+Return format (JSON only, no other text):
+{{"intent": "<intent value>", "confidence": <0-1>, "reasoning": "<one short sentence>"}}
 
-可选意图: {", ".join(c.value for c in IntentCategory)}"""
+Available intents: {", ".join(c.value for c in IntentCategory)}"""
         prompt = self._clean_text(prompt)
 
         try:
@@ -322,30 +322,48 @@ class IntentRecognizer:
     def _pattern_recognize(self, message: str) -> Dict[str, Any]:
         """策略 3：关键词模式匹配（同步，零延迟兜底）。"""
         msg = message.lower()
+        # 关键词双语:保留中文,并补英文,保证中英文输入都能命中(意图识别本身以 LLM 为主,关键词为兜底)。
         specific_patterns = {
             IntentCategory.ADVICE_REQUEST: ["推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨",
-                "能涨到", "涨不涨", "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "代客", "全仓", "梭哈", "抄底"],
-            IntentCategory.RESEARCH_REPORT: ["研报", "研究报告", "券商报告", "评级报告"],
-            IntentCategory.FUNDAMENTAL: ["财报", "年报", "季报", "营收", "净利润", "毛利率", "基本面"],
-            IntentCategory.VALUATION: ["估值", "市盈率", "pe", "pb", "市净率", "roe", "分位"],
-            IntentCategory.QUANT_CONCEPT: ["因子", "回测", "夏普", "最大回撤", "波动率", "beta", "阿尔法", "alpha"],
-            IntentCategory.COMPARISON: ["对比", "比较", "哪个更好", "区别", "vs"],
-            IntentCategory.PRODUCT_INFO: ["etf", "基金", "跟踪误差", "成分股", "重仓", "费率", "申赎"],
-            IntentCategory.TRADING_RULE: ["t+1", "涨跌停", "交易时间", "交易时段", "集合竞价", "佣金", "印花税", "过户费"],
-            IntentCategory.TERM_EXPLAIN: ["什么意思", "怎么理解", "是什么", "什么叫", "概念"],
-            IntentCategory.MARKET_QUOTE: ["行情", "指数", "点位", "股价", "涨了", "跌了", "多少点"],
-            IntentCategory.SUITABILITY: ["风险测评", "适当性", "风险等级", "r1", "r2", "r3", "r4", "r5", "能买"],
-            IntentCategory.RISK_DISCLOSURE: ["风险揭示", "有什么风险", "风险提示", "杠杆风险"],
-            IntentCategory.ACCOUNT: ["开户", "销户", "账户", "绑定银行卡", "三方存管"],
-            IntentCategory.FUNDING: ["银证转账", "出金", "入金", "转账", "资金流水", "到账"],
-            IntentCategory.STATEMENT: ["对账单", "交割单", "交易流水", "税务凭证"],
-            IntentCategory.HUMAN_HANDOFF: ["转人工", "人工投顾", "找人工", "投资顾问"],
+                "能涨到", "涨不涨", "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "代客", "全仓", "梭哈", "抄底",
+                "recommend", "should i buy", "should i sell", "which to buy", "what to buy", "will it go up",
+                "will it rise", "guaranteed", "buy for me", "place a buy order", "worth buying", "all in", "price target"],
+            IntentCategory.RESEARCH_REPORT: ["研报", "研究报告", "券商报告", "评级报告",
+                "research report", "broker report", "analyst report", "rating report"],
+            IntentCategory.FUNDAMENTAL: ["财报", "年报", "季报", "营收", "净利润", "毛利率", "基本面",
+                "financial report", "annual report", "quarterly report", "revenue", "net profit", "gross margin", "fundamentals", "earnings"],
+            IntentCategory.VALUATION: ["估值", "市盈率", "pe", "pb", "市净率", "roe", "分位",
+                "valuation", "p/e", "p/b", "percentile", "market cap"],
+            IntentCategory.QUANT_CONCEPT: ["因子", "回测", "夏普", "最大回撤", "波动率", "beta", "阿尔法", "alpha",
+                "factor", "backtest", "sharpe", "drawdown", "volatility"],
+            IntentCategory.COMPARISON: ["对比", "比较", "哪个更好", "区别", "vs",
+                "compare", "comparison", "which is better", "difference"],
+            IntentCategory.PRODUCT_INFO: ["etf", "基金", "跟踪误差", "成分股", "重仓", "费率", "申赎",
+                "fund", "tracking error", "holdings", "expense ratio", "fee"],
+            IntentCategory.TRADING_RULE: ["t+1", "涨跌停", "交易时间", "交易时段", "集合竞价", "佣金", "印花税", "过户费",
+                "price limit", "trading hours", "auction", "commission", "stamp duty", "settlement"],
+            IntentCategory.TERM_EXPLAIN: ["什么意思", "怎么理解", "是什么", "什么叫", "概念",
+                "what does", "what is", "meaning of", "how to understand", "definition"],
+            IntentCategory.MARKET_QUOTE: ["行情", "指数", "点位", "股价", "涨了", "跌了", "多少点",
+                "index", "quote", "points", "went up", "went down"],
+            IntentCategory.SUITABILITY: ["风险测评", "适当性", "风险等级", "r1", "r2", "r3", "r4", "r5", "能买",
+                "suitability", "risk level", "risk assessment", "risk rating", "can i buy", "am i allowed"],
+            IntentCategory.RISK_DISCLOSURE: ["风险揭示", "有什么风险", "风险提示", "杠杆风险",
+                "risk disclosure", "what are the risks", "risk warning", "leverage risk"],
+            IntentCategory.ACCOUNT: ["开户", "销户", "账户", "绑定银行卡", "三方存管",
+                "open an account", "open account", "close account", "bank card", "custody"],
+            IntentCategory.FUNDING: ["银证转账", "出金", "入金", "转账", "资金流水", "到账",
+                "bank-securities transfer", "withdrawal", "deposit", "cash flow"],
+            IntentCategory.STATEMENT: ["对账单", "交割单", "交易流水", "税务凭证",
+                "account statement", "trade confirmation", "transaction record"],
+            IntentCategory.HUMAN_HANDOFF: ["转人工", "人工投顾", "找人工", "投资顾问",
+                "human advisor", "real person", "investment advisor", "talk to someone"],
         }
         generic_patterns = {
-            IntentCategory.ESCALATION: ["投诉", "主管", "经理", "supervisor"],
-            IntentCategory.COMPLAINT:  ["太差", "糟糕", "垃圾", "等了很久"],
-            IntentCategory.GREETING:   ["你好", "在吗", "hello", "hi", "早上好"],
-            IntentCategory.FEEDBACK:   ["谢谢", "感谢", "很清楚", "点赞", "满意"],
+            IntentCategory.ESCALATION: ["投诉", "主管", "经理", "supervisor", "complaint", "manager"],
+            IntentCategory.COMPLAINT:  ["太差", "糟糕", "垃圾", "等了很久", "terrible", "awful", "worst"],
+            IntentCategory.GREETING:   ["你好", "在吗", "早上好", "hello", "good morning"],
+            IntentCategory.FEEDBACK:   ["谢谢", "感谢", "很清楚", "点赞", "满意", "thank", "helpful", "great"],
         }
 
         best_cat, best_score = self._best_pattern_match(msg, specific_patterns)
@@ -402,7 +420,7 @@ class IntentRecognizer:
         return {
             "ticker": self._unique(re.findall(r"(?<![A-Za-z0-9])(\d{6}|[A-Z]{2,5})(?![A-Za-z0-9])", message)),
             "metric": self._unique(re.findall(
-                r"(市盈率|市净率|夏普比率|最大回撤|波动率|市盈|夏普|PE|PB|ROE|ROA|EPS|Beta|Alpha|阿尔法|贝塔)",
+                r"(市盈率|市净率|夏普比率|最大回撤|波动率|市盈|夏普|P/E|P/B|P/S|PE|PB|ROE|ROA|EPS|Sharpe|drawdown|Beta|Alpha|阿尔法|贝塔)",
                 message, re.I)),
             "risk_level": [v.upper() for v in self._unique(
                 re.findall(r"(?<![A-Za-z])([RrCc][1-5])(?![0-9])", message))],
