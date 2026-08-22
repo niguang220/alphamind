@@ -1,17 +1,16 @@
 """
-亮点：端到端 Agent 评测框架
+Highlight: end-to-end agent evaluation framework.
 
-核心问题：如何评测端到端 Agent？
+Core problem: how to evaluate an end-to-end agent?
 
-评测维度：
-  1. 意图识别准确率 —— 预测意图 vs 标注意图，计算 Accuracy / F1
-  2. 响应质量评分 —— 用 LLM 作为评判者（LLM-as-Judge），
-     从相关性、准确性、完整性、有用性四个维度打分
-  3. 端到端对话评测 —— 模拟完整多轮对话，评估整体体验
-  4. 回归测试 —— 与历史基线对比，防止性能退化
+Dimensions:
+  1. Intent accuracy -- predicted vs labeled intent, computing Accuracy / F1
+  2. Response quality -- LLM-as-Judge scoring across relevance, accuracy, completeness, helpfulness
+  3. End-to-end dialogue -- simulate full multi-turn conversations and assess overall experience
+  4. Regression -- compare against a historical baseline to prevent degradation
 
-LLM-as-Judge 是评测 Agent 质量的关键技术：
-  人工标注成本高、主观性强；用 LLM 评判可以规模化、可重复。
+LLM-as-Judge is the key technique for evaluating agent quality:
+  human labeling is costly and subjective; LLM judging is scalable and repeatable.
 """
 import asyncio
 import json
@@ -32,7 +31,7 @@ from core.intent_recognizer import IntentCategory, IntentRecognizer
 logger = logging.getLogger(__name__)
 
 
-# ── 数据结构 ──────────────────────────────────────────────────────────────────
+# ── Data structures ──────────────────────────────────────────────────────────
 
 @dataclass
 class IntentTestCase:
@@ -43,11 +42,11 @@ class IntentTestCase:
 
 @dataclass
 class QualityScores:
-    """LLM-as-Judge 评分结果。"""
-    relevance:    float   # 相关性：回答是否针对问题
-    accuracy:     float   # 准确性：信息是否正确
-    completeness: float   # 完整性：是否完整解决问题
-    helpfulness:  float   # 有用性：用户是否能据此行动
+    """LLM-as-Judge scoring result."""
+    relevance:    float   # relevance: does the answer address the question
+    accuracy:     float   # accuracy: is the information correct
+    completeness: float   # completeness: fully resolves the need
+    helpfulness:  float   # helpfulness: can the user act on it
     judge_failed: bool = False
     error: Optional[str] = None
 
@@ -67,13 +66,13 @@ class EvalResult:
 
 @dataclass
 class EvalReport:
-    """评测报告。"""
+    """Evaluation report."""
     timestamp:        str
     total:            int
     passed:           int
     pass_rate:        float
     avg_scores:       Dict[str, float]
-    regressions:      List[str]          # 相比基线退化的指标
+    regressions:      List[str]          # metrics regressed vs baseline
     recommendations:  List[str]
     results:          List[EvalResult]
 
@@ -82,14 +81,14 @@ class EvalReport:
 
 class LLMJudge:
     """
-    用 LLM 评判 Agent 响应质量。
+    Judge agent response quality with an LLM.
 
-    为什么用 LLM 而不是人工？
-    - 可规模化：数千条测试用例自动评测
-    - 可重复：相同输入得到稳定评分
-    - 多维度：同时评估相关性、准确性等多个维度
+    Why an LLM instead of humans?
+    - Scalable: thousands of test cases evaluated automatically
+    - Repeatable: the same input yields stable scores
+    - Multi-dimensional: relevance, accuracy, etc. scored at once
 
-    注意：LLM Judge 本身也有偏差，建议定期用人工标注校准。
+    Note: the LLM judge is itself biased; calibrate periodically with human labels.
     """
 
     JUDGE_PROMPT = """You are a quality evaluator for a securities investment-research assistant. Score the assistant's response below.
@@ -139,7 +138,7 @@ Return JSON only, e.g.: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7
                 helpfulness=float(data.get("helpfulness", 0.5)),
             )
         except Exception as ex:
-            logger.warning(f"LLM Judge 失败: {ex}")
+            logger.warning(f"LLM Judge failed: {ex}")
             return QualityScores(
                 0.5, 0.5, 0.5, 0.5,
                 judge_failed=True,
@@ -148,7 +147,7 @@ Return JSON only, e.g.: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7
 
     @staticmethod
     def _clean_text(value: Any) -> str:
-        """移除 Unicode 代理字符，避免 LLM 请求编码失败。"""
+        """Strip Unicode surrogate chars so the LLM request does not fail to encode."""
         if value is None:
             return ""
         if not isinstance(value, str):
@@ -156,10 +155,10 @@ Return JSON only, e.g.: {{"relevance": 0.9, "accuracy": 0.8, "completeness": 0.7
         return value.encode("utf-8", errors="ignore").decode("utf-8")
 
 
-# ── 意图识别评测 ──────────────────────────────────────────────────────────────
+# ── Intent-recognition evaluation ─────────────────────────────────────────────
 
 class IntentEvaluator:
-    """评测意图识别的准确率和 F1。"""
+    """Evaluate intent-recognition accuracy and F1."""
 
     def __init__(self, recognizer: IntentRecognizer):
         self._recognizer = recognizer
@@ -181,11 +180,11 @@ class IntentEvaluator:
                 "reasoning": result.reasoning,
             })
 
-        # 纯 Python 计算指标
+        # compute metrics in pure Python
         correct = sum(p == g for p, g in zip(predictions, ground_truth))
         accuracy = correct / len(predictions) if predictions else 0.0
 
-        # 每类 F1
+        # per-class F1
         labels = sorted(set(ground_truth + predictions))
         per_class: Dict[str, Dict[str, float]] = {}
         for label in labels:
@@ -209,20 +208,20 @@ class IntentEvaluator:
         }
 
 
-# ── 端到端评测器 ──────────────────────────────────────────────────────────────
+# ── End-to-end evaluator ──────────────────────────────────────────────────────
 
 class EndToEndEvaluator:
     """
-    端到端 Agent 评测。
+    End-to-end agent evaluation.
 
-    评测流程：
-      1. 运行意图识别评测（准确率/F1）
-      2. 运行对话质量评测（LLM-as-Judge）
-      3. 与历史基线对比（回归检测）
-      4. 生成可操作的优化建议
+    Flow:
+      1. run intent-recognition evaluation (accuracy/F1)
+      2. run dialogue-quality evaluation (LLM-as-Judge)
+      3. compare against the historical baseline (regression detection)
+      4. generate actionable suggestions
     """
 
-    # 质量及格线
+    # quality pass threshold
     PASS_THRESHOLD = 0.75
 
     def __init__(
@@ -252,19 +251,19 @@ class EndToEndEvaluator:
         dialog_cases:    Optional[List[Dict[str, Any]]] = None,
     ) -> EvalReport:
         """
-        运行完整评测。
+        Run the full evaluation.
 
-        intent_cases: 意图识别测试用例
+        intent_cases: intent-recognition test cases
         dialog_cases:
-          - 单轮: [{"question": "..."}]
-          - 多轮: [{"turns": ["第一轮", "第二轮", ...]}]
+          - single turn: [{"question": "..."}]
+          - multi-turn: [{"turns": ["turn 1", "turn 2", ...]}]
         """
         results: List[EvalResult] = []
         all_scores: Dict[str, List[float]] = {
             "relevance": [], "accuracy": [], "completeness": [], "helpfulness": []
         }
 
-        # 1. 意图识别评测
+        # 1. intent-recognition evaluation
         intent_metrics: Dict[str, Any] = {}
         if intent_cases:
             intent_metrics = await self._intent_evaluator.evaluate(intent_cases)
@@ -281,7 +280,7 @@ class EndToEndEvaluator:
                 },
             ))
 
-        # 2. 对话质量评测（调用 orchestrator 产出回复，再用 LLM Judge 评分）
+        # 2. dialogue-quality evaluation (call the orchestrator for replies, then LLM-Judge scores them)
         if dialog_cases:
             for i, case in enumerate(dialog_cases):
                 case_results = await self._evaluate_dialog_case(case, i)
@@ -291,14 +290,14 @@ class EndToEndEvaluator:
                         if k in r.scores:
                             all_scores[k].append(r.scores[k])
 
-        # 3. 汇总
+        # 3. aggregate
         avg_scores = {
             k: round(statistics.mean(v), 4) for k, v in all_scores.items() if v
         }
         if intent_metrics:
             avg_scores["intent_accuracy"] = intent_metrics["accuracy"]
 
-        # 护栏拦截准确率:护栏用例中被正确拦截(升级 + 明确不构成投资建议)的比例
+        # guardrail hit rate: share of guardrail cases correctly intercepted (escalated + explicit refusal)
         guardrail_flags = [
             r.metadata.get("guardrail_hit")
             for r in results
@@ -312,10 +311,10 @@ class EndToEndEvaluator:
         passed_count = sum(1 for r in results if r.passed)
         pass_rate    = passed_count / len(results) if results else 0.0
 
-        # 4. 回归检测
+        # 4. regression detection
         regressions = self._detect_regressions(avg_scores)
 
-        # 5. 优化建议
+        # 5. suggestions
         recommendations = self._recommendations(avg_scores, intent_metrics)
 
         report = EvalReport(
@@ -333,7 +332,7 @@ class EndToEndEvaluator:
         return report
 
     async def _evaluate_dialog_case(self, case: Dict[str, Any], case_idx: int) -> List[EvalResult]:
-        """评测单轮或多轮对话用例。"""
+        """Evaluate a single-turn or multi-turn dialogue case."""
         from agents.agent_orchestrator import Request as OrcReq
 
         questions = self._dialog_turns(case)
@@ -360,8 +359,8 @@ class EndToEndEvaluator:
 
             scores = await self._judge.judge(question, actual_answer, context=context or None)
 
-            # 护栏用例:成功标准是"被正确拦截"(升级 + 明确不构成投资建议),
-            # 而非 Judge 的通用质量分(拒答在有用性维度上可能偏低)。
+            # guardrail case: pass criterion is "correctly intercepted" (escalated + explicit refusal),
+            # not the Judge's generic quality score (a refusal may score low on helpfulness).
             guardrail_hit: Optional[bool] = None
             if is_guardrail:
                 ans_l = (actual_answer or "").lower()
@@ -418,10 +417,10 @@ class EndToEndEvaluator:
         if not history:
             return ""
         lines = [f"{m['role']}: {m['content']}" for m in history[-8:]]
-        return "[评测多轮历史]\n" + "\n".join(lines)
+        return "[Multi-turn eval history]\n" + "\n".join(lines)
 
     def _detect_regressions(self, current: Dict[str, float]) -> List[str]:
-        """与上一次评测对比，找出退化超过 5% 的指标。"""
+        """Compare with the previous run to find metrics that regressed by more than 5%."""
         prev_report = self._history[-1] if self._history else self._baseline
         if prev_report is None:
             return []
@@ -432,7 +431,7 @@ class EndToEndEvaluator:
                 delta = (value - prev[metric]) / prev[metric]
                 if delta < -0.05:
                     regressions.append(
-                        f"{metric}: {prev[metric]:.3f} → {value:.3f} (退化 {abs(delta):.1%})"
+                        f"{metric}: {prev[metric]:.3f} -> {value:.3f} (regressed {abs(delta):.1%})"
                     )
         return regressions
 
@@ -465,7 +464,7 @@ class EndToEndEvaluator:
             data = json.loads(self._baseline_path.read_text(encoding="utf-8"))
             return self._report_from_dict(data)
         except Exception as ex:
-            logger.warning(f"读取评测基线失败: {ex}")
+            logger.warning(f"failed to read eval baseline: {ex}")
             return None
 
     def _save_baseline(self, report: EvalReport) -> None:
@@ -479,7 +478,7 @@ class EndToEndEvaluator:
             )
             self._baseline = report
         except Exception as ex:
-            logger.warning(f"保存评测基线失败: {ex}")
+            logger.warning(f"failed to save eval baseline: {ex}")
 
     @staticmethod
     def _report_from_dict(data: Dict[str, Any]) -> EvalReport:
@@ -504,7 +503,7 @@ class EndToEndEvaluator:
         )
 
 
-# ── 内置测试用例（开箱即用）──────────────────────────────────────────────────
+# ── Built-in test cases (ready to use) ────────────────────────────────────────
 
 DEFAULT_INTENT_CASES: List[IntentTestCase] = [
     IntentTestCase("What is the fee of the CSI 300 ETF",          "product_info"),

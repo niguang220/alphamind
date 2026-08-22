@@ -1,15 +1,15 @@
 """
-亮点：利用 Monitor 监控 Agent 在线表现
+Highlight: monitoring agent online performance with Monitor.
 
-核心问题：如何利用 Monitor 监控 Agent 的在线表现？
+Core problem: how to monitor agents' online performance?
 
-本模块的答案：
-  1. 实时采集 —— 每隔 N 秒从 Orchestrator 和 ToolManager 拉取最新统计
-  2. 异常检测 —— Z-score 统计方法，自动发现指标突变
-  3. 路由反馈 —— 将 Agent 成功率/延迟写回 Orchestrator，
-     Orchestrator 的 _best_agent() 会据此动态调整路由权重
-  4. 优化建议 —— 基于规则生成可操作的优化建议（不是空话）
-  5. 告警 —— 超阈值时打日志 + 可选 Webhook
+This module's answers:
+  1. Live collection -- every N seconds, pull the latest stats from the Orchestrator and ToolManager
+  2. Anomaly detection -- Z-score statistics automatically catch sudden metric shifts
+  3. Routing feedback -- write agent success rate/latency back to the Orchestrator,
+     whose _best_agent() then dynamically adjusts routing weights
+  4. Suggestions -- rule-based, actionable improvement suggestions (not empty talk)
+  5. Alerts -- log on threshold breach + optional webhook
 """
 import asyncio
 import logging
@@ -27,7 +27,7 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 logger = logging.getLogger(__name__)
 
 
-# ── 数据结构 ──────────────────────────────────────────────────────────────────
+# ── Data structures ──────────────────────────────────────────────────────────
 
 class Severity(Enum):
     INFO     = "info"
@@ -49,21 +49,21 @@ class Alert:
 
 @dataclass
 class Suggestion:
-    """可操作的优化建议。"""
+    """An actionable improvement suggestion."""
     title:       str
     detail:      str
-    action:      str    # 具体操作步骤
+    action:      str    # concrete steps
     priority:    int    # 1-10
 
 
-# ── 异常检测 ──────────────────────────────────────────────────────────────────
+# ── Anomaly detection ─────────────────────────────────────────────────────────
 
 class AnomalyDetector:
     """
-    基于滑动窗口 Z-score 的异常检测。
+    Sliding-window Z-score anomaly detection.
 
-    Z-score = |当前值 - 均值| / 标准差
-    超过 sensitivity 倍标准差则判定为异常。
+    Z-score = |value - mean| / stddev
+    Flagged as an anomaly when it exceeds `sensitivity` standard deviations.
     """
 
     def __init__(self, window: int = 60, sensitivity: float = 2.5):
@@ -72,12 +72,12 @@ class AnomalyDetector:
         self._history: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=window))
 
     def record(self, metric: str, value: float) -> Optional[Dict[str, Any]]:
-        """记录一个数据点，如果异常则返回异常信息，否则返回 None。"""
+        """Record a data point; return anomaly info if anomalous, else None."""
         buf = self._history[metric]
         buf.append(value)
 
         if len(buf) < self._window // 2:
-            return None  # 数据不足，不检测
+            return None  # not enough data, skip detection
 
         mean  = statistics.mean(buf)
         stdev = statistics.stdev(buf) if len(buf) > 1 else 0.0
@@ -96,21 +96,21 @@ class AnomalyDetector:
         return None
 
 
-# ── 性能监控器 ────────────────────────────────────────────────────────────────
+# ── Performance monitor ───────────────────────────────────────────────────────
 
 class PerformanceMonitor:
     """
-    Agent 在线表现监控。
+    Agent online-performance monitoring.
 
-    与 Orchestrator 的联动：
-      Monitor 采集 → 发现某 Agent 成功率下降 →
-      Orchestrator.get_stats() 中该 Agent 的 routing_score 自动降低 →
-      _best_agent() 路由时自动绕开该 Agent
+    Loop with the Orchestrator:
+      Monitor collects -> an agent's success rate drops ->
+      that agent's routing_score in Orchestrator.get_stats() decreases ->
+      _best_agent() routes around it automatically
 
-    这就是"利用 Monitor 监控在线表现"的闭环。
+    That is the closed loop of "monitoring online performance with Monitor".
     """
 
-    # 告警阈值
+    # alert thresholds
     THRESHOLDS = {
         "agent_success_rate":  (0.90, Severity.ERROR,   "less_than"),
         "tool_success_rate":   (0.95, Severity.WARNING,  "less_than"),
@@ -124,7 +124,7 @@ class PerformanceMonitor:
         tool_manager,
         interval_s:       float = 10.0,
         webhook_url:      Optional[str] = None,
-        prometheus_port:  Optional[int] = None,   # None = 不启动
+        prometheus_port:  Optional[int] = None,   # None = do not start
     ):
         self._orchestrator = orchestrator
         self._tool_manager = tool_manager
@@ -137,29 +137,29 @@ class PerformanceMonitor:
         self._active       = False
         self._task:        Optional[asyncio.Task] = None
 
-        # Prometheus 指标（可选）
+        # Prometheus metrics (optional)
         self._prom: Dict[str, Any] = {}
         if prometheus_port:
             self._setup_prometheus(prometheus_port)
 
     def _setup_prometheus(self, port: int) -> None:
         self._prom = {
-            "agent_success_rate": Gauge("agent_success_rate", "Agent 成功率", ["agent"]),
-            "agent_latency_ms":   Histogram("agent_latency_ms", "Agent 延迟", ["agent"]),
-            "tool_success_rate":  Gauge("tool_success_rate", "工具成功率", ["tool"]),
-            "requests_total":     Counter("requests_total", "总请求数"),
+            "agent_success_rate": Gauge("agent_success_rate", "Agent success rate", ["agent"]),
+            "agent_latency_ms":   Histogram("agent_latency_ms", "Agent latency", ["agent"]),
+            "tool_success_rate":  Gauge("tool_success_rate", "Tool success rate", ["tool"]),
+            "requests_total":     Counter("requests_total", "Total requests"),
         }
         start_http_server(port)
-        logger.info(f"Prometheus 已启动: :{port}")
+        logger.info(f"Prometheus started: :{port}")
 
-    # ── 生命周期 ──────────────────────────────────────────────────────────────
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         if self._active:
             return
         self._active = True
         self._task   = asyncio.create_task(self._loop())
-        logger.info(f"Monitor 已启动，采集间隔 {self._interval}s")
+        logger.info(f"Monitor started, collection interval {self._interval}s")
 
     async def stop(self) -> None:
         self._active = False
@@ -170,39 +170,39 @@ class PerformanceMonitor:
             except asyncio.CancelledError:
                 pass
 
-    # ── 采集循环 ──────────────────────────────────────────────────────────────
+    # ── Collection loop ───────────────────────────────────────────────────────
 
     async def _loop(self) -> None:
         while self._active:
             try:
                 await self._collect()
             except Exception as ex:
-                logger.error(f"Monitor 采集异常: {ex}")
+                logger.error(f"Monitor collection error: {ex}")
             await asyncio.sleep(self._interval)
 
     async def _collect(self) -> None:
         """
-        采集 Agent 和工具的实时统计，检测异常，生成建议。
+        Collect live agent and tool stats, detect anomalies, generate suggestions.
 
-        关键：这里读取的 stats 就是 Orchestrator/ToolManager 在处理请求时
-        实时更新的数据，Monitor 不需要额外埋点。
+        Key: the stats read here are updated live by the Orchestrator/ToolManager while
+        handling requests, so Monitor needs no extra instrumentation.
         """
         agent_stats = self._orchestrator.get_stats()
         tool_stats  = self._tool_manager.get_stats()
         routing_penalties: Dict[str, float] = {}
 
-        # ── Agent 指标 ────────────────────────────────────────────────────────
+        # ── Agent metrics ─────────────────────────────────────────────────────
         for agent_key, s in agent_stats.items():
             sr  = s["success_rate"]
             ms  = s["avg_ms"]
 
-            # 异常检测
+            # anomaly detection
             for metric, value in [("agent_success_rate", sr), ("agent_avg_ms", ms)]:
                 anomaly = self._detector.record(f"{metric}:{agent_key}", value)
                 if anomaly:
-                    logger.warning(f"异常检测 [{agent_key}] {metric}={value:.3f} z={anomaly['z_score']}")
+                    logger.warning(f"anomaly [{agent_key}] {metric}={value:.3f} z={anomaly['z_score']}")
 
-            # 阈值告警
+            # threshold alert
             self._check_threshold("agent_success_rate", sr, agent_key)
             self._check_threshold("agent_avg_ms", ms, agent_key)
 
@@ -213,7 +213,7 @@ class PerformanceMonitor:
 
             routing_penalties[agent_key] = self._routing_penalty(sr, ms)
 
-        # ── 工具指标 ──────────────────────────────────────────────────────────
+        # ── Tool metrics ──────────────────────────────────────────────────────
         for tool_name, s in tool_stats.items():
             sr = s["success_rate"]
             ms = s["avg_latency_ms"]
@@ -225,16 +225,16 @@ class PerformanceMonitor:
             if "tool_success_rate" in self._prom:
                 self._prom["tool_success_rate"].labels(tool=tool_name).set(sr)
 
-            # 连续失败 → 生成具体建议
+            # consecutive failures -> generate a concrete suggestion
             if cf >= 3:
                 self._add_suggestion(Suggestion(
-                    title=f"工具 {tool_name} 连续失败 {cf} 次",
-                    detail=f"成功率 {sr:.1%}，平均延迟 {ms:.0f}ms，熔断状态: {s['circuit_state']}",
-                    action="1. 检查工具依赖服务是否正常\n2. 查看错误日志\n3. 考虑增加超时时间或降级策略",
+                    title=f"Tool {tool_name} failed {cf} times in a row",
+                    detail=f"success rate {sr:.1%}, avg latency {ms:.0f}ms, circuit: {s['circuit_state']}",
+                    action="1. Check the tool's dependencies\n2. Review error logs\n3. Consider a longer timeout or a fallback",
                     priority=9,
                 ))
 
-        # ── 路由优化建议 ──────────────────────────────────────────────────────
+        # ── Routing suggestions ───────────────────────────────────────────────
         updater = getattr(self._orchestrator, "update_routing_penalties", None)
         if updater:
             updater(routing_penalties)
@@ -242,7 +242,7 @@ class PerformanceMonitor:
 
     @staticmethod
     def _routing_penalty(success_rate: float, avg_ms: float) -> float:
-        """把在线表现转成 0-0.9 的路由降权系数。"""
+        """Convert online performance into a 0-0.9 routing penalty factor."""
         penalty = 0.0
         if success_rate < 0.90:
             penalty += min(0.5, (0.90 - success_rate) * 2)
@@ -260,52 +260,52 @@ class PerformanceMonitor:
             alert = Alert(
                 severity=severity,
                 metric=f"{metric}:{label}",
-                message=f"{label} 的 {metric} = {value:.3f}，阈值 {threshold}",
+                message=f"{label} {metric} = {value:.3f}, threshold {threshold}",
                 value=value,
                 threshold=threshold,
             )
             self._alerts.append(alert)
             logger.warning(f"[{severity.value.upper()}] {alert.message}")
-            # 异步发送 Webhook（不阻塞采集循环）
+            # send the webhook asynchronously (do not block the collection loop)
             if self._webhook:
                 asyncio.create_task(self._send_webhook(alert))
 
     def _generate_routing_suggestions(self, agent_stats: Dict[str, Any]) -> None:
         """
-        基于 Agent 在线表现生成路由优化建议。
-        这是 Monitor → Orchestrator 反馈闭环的体现。
+        Generate routing suggestions from agents' online performance.
+        This embodies the Monitor -> Orchestrator feedback loop.
         """
         for agent_key, s in agent_stats.items():
             if s["success_rate"] < 0.85 and s["total"] > 10:
                 self._add_suggestion(Suggestion(
-                    title=f"Agent {agent_key} 成功率偏低",
-                    detail=f"成功率 {s['success_rate']:.1%}，路由评分 {s['routing_score']:.3f}",
+                    title=f"Agent {agent_key} has low success rate",
+                    detail=f"success rate {s['success_rate']:.1%}, routing score {s['routing_score']:.3f}",
                     action=(
-                        "Orchestrator 的 _best_agent() 已自动降低该 Agent 的路由权重。\n"
-                        "建议：1. 检查 system_prompt 是否需要优化\n"
-                        "      2. 检查该类型问题的复杂度是否超出 Agent 能力\n"
-                        "      3. 考虑增加同类型 Agent 实例"
+                        "Orchestrator's _best_agent() has already lowered this agent's routing weight.\n"
+                        "Suggestions: 1. Check whether the system_prompt needs tuning\n"
+                        "             2. Check whether the problem complexity exceeds the agent's ability\n"
+                        "             3. Consider adding more instances of this agent type"
                     ),
                     priority=8,
                 ))
 
     def _add_suggestion(self, s: Suggestion) -> None:
-        # 去重：相同 title 不重复添加
+        # dedupe: do not add duplicate titles
         if not any(x.title == s.title for x in self._suggestions):
             self._suggestions.append(s)
-            logger.info(f"优化建议 [P{s.priority}]: {s.title}")
+            logger.info(f"suggestion [P{s.priority}]: {s.title}")
 
     async def _send_webhook(self, alert: Alert) -> None:
         try:
             async with httpx.AsyncClient(timeout=5.0) as c:
                 await c.post(self._webhook, json=asdict(alert))  # type: ignore
         except Exception as ex:
-            logger.error(f"Webhook 发送失败: {ex}")
+            logger.error(f"webhook send failed: {ex}")
 
-    # ── 查询接口 ──────────────────────────────────────────────────────────────
+    # ── Query API ─────────────────────────────────────────────────────────────
 
     def summary(self) -> Dict[str, Any]:
-        """返回当前监控摘要，供 API 层暴露。"""
+        """Return the current monitoring summary for the API layer."""
         return {
             "agent_stats":   self._orchestrator.get_stats(),
             "tool_stats":    self._tool_manager.get_stats(),
