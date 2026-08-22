@@ -1,7 +1,7 @@
 """
 AlphaMind — Securities Investment-Research Assistant (FastAPI entrypoint)
 
-所有核心组件在 lifespan 中初始化，通过环境变量配置。
+All core components are initialized in lifespan and configured via environment variables.
 """
 import asyncio
 import logging
@@ -39,7 +39,7 @@ BANNER = r"""
    ╚════════════════════════════════════╝
 """
 
-# ── 全局组件（lifespan 中初始化）─────────────────────────────────────────────
+# ── Global components (initialized in lifespan) ──────────────────────────────
 _orchestrator = None
 _memory       = None
 _tool_manager = None
@@ -77,16 +77,16 @@ async def lifespan(app: FastAPI):
     from core.skill_loader import SkillManager
 
     cfg = _anthropic_cfg()
-    logger.info(f"模型: {cfg['model']}  base_url: {cfg.get('base_url', '(官方)')}")
+    logger.info(f"model: {cfg['model']}  base_url: {cfg.get('base_url', '(official)')}")
 
-    # 意图识别器（Orchestrator 内部也会创建，这里单独暴露给 Evaluator）
+    # Intent recognizer (the Orchestrator also creates one; exposed here for the Evaluator)
     recognizer = IntentRecognizer(
         api_key=cfg["api_key"],
         base_url=cfg.get("base_url"),
         model=cfg["model"],
     )
 
-    # Skills：启动时从目录加载业务能力说明，并在 Agent 调用 LLM 时动态注入。
+    # Skills: loaded from a directory at startup and injected dynamically when an agent calls the LLM.
     skills_dir = os.getenv("ALPHAMIND_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills"))
     _skill_manager = SkillManager(
         root_dir=skills_dir,
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
     )
     _skill_manager.load()
 
-    # Agent 编排器
+    # Agent orchestrator
     _orchestrator = AgentOrchestrator(
         api_key=cfg["api_key"],
         base_url=cfg.get("base_url"),
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
         skill_manager=_skill_manager,
     )
 
-    # 记忆管理器（Redis 工作记忆 + ChromaDB 情景记忆/用户画像）
+    # Memory manager (Redis working memory + ChromaDB episodic memory / user profile)
     _memory = MemoryManager(
         redis_url=os.getenv("REDIS_URL", "redis://redis:6379/0"),
         chroma_host=os.getenv("CHROMA_HOST", "chromadb"),
@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
         model=cfg["model"],
     )
 
-    # MCP 工具管理器 + RAG 知识库（基于 ChromaDB 的真实检索）
+    # MCP tool manager + RAG knowledge base (real ChromaDB retrieval)
     _tool_manager = MCPToolManager(
         api_key=cfg["api_key"],
         base_url=cfg.get("base_url"),
@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI):
         fallback=knowledge_fallback,
     ))
 
-    # 性能监控（可选启动 Prometheus）
+    # Performance monitor (optionally starts Prometheus)
     prom_port = int(os.getenv("PROMETHEUS_PORT", "0")) or None
     _monitor = PerformanceMonitor(
         orchestrator=_orchestrator,
@@ -164,7 +164,7 @@ async def lifespan(app: FastAPI):
     )
     await _monitor.start()
 
-    # 评测器
+    # Evaluator
     _evaluator = EndToEndEvaluator(
         orchestrator=_orchestrator,
         recognizer=recognizer,
@@ -200,7 +200,7 @@ app.add_middleware(
 )
 
 
-# ── 请求/响应模型 ─────────────────────────────────────────────────────────────
+# ── Request/response models ──────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     message:     str
     user_id:     str = "anonymous"
@@ -226,7 +226,7 @@ class ChatResponse(BaseModel):
     intent_source_scores: Dict[str, float] = Field(default_factory=dict)
 
 
-# ── 路由 ──────────────────────────────────────────────────────────────────────
+# ── Routes ───────────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
     if _orchestrator is None:
@@ -236,7 +236,7 @@ async def health():
 
 @app.get("/skills", tags=["Skills"])
 async def skills_summary():
-    """查看当前已加载的 Skills，便于确认热加载结果和排查解析错误。"""
+    """View currently loaded Skills; handy for confirming hot reloads and debugging parse errors."""
     if _skill_manager is None:
         raise HTTPException(503, "Skills not initialized")
     return _skill_manager.summary()
@@ -244,7 +244,7 @@ async def skills_summary():
 
 @app.post("/skills/reload", tags=["Skills"])
 async def reload_skills():
-    """运行时重新扫描 Skill 目录，不需要重启服务。"""
+    """Rescan the Skill directory at runtime without restarting the service."""
     if _skill_manager is None:
         raise HTTPException(503, "Skills not initialized")
     _skill_manager.reload()
@@ -256,8 +256,8 @@ async def reload_skills():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     """
-    主对话接口。完整流程：
-      记忆读取 → 意图识别 → Agent 路由 → 执行 → 记忆写入
+    Main chat endpoint. Full flow:
+      read memory -> intent recognition -> agent routing -> execute -> write memory
     """
     if _orchestrator is None or _memory is None:
         raise HTTPException(503, "Service not ready")
@@ -267,10 +267,10 @@ async def chat(req: ChatRequest):
 
     conv_id = req.conv_id or str(uuid.uuid4())
 
-    # 1. 读取记忆上下文
+    # 1. read memory context
     mem_ctx = await _memory.get_context(req.user_id, conv_id, query=req.message)
 
-    # 2. 构建编排请求（含对话历史，用于意图识别上下文）
+    # 2. build the orchestration request (with history, used as intent-recognition context)
     history = [
         {"role": m.role.value, "content": m.content}
         for m in mem_ctx.recent_messages[-5:]
@@ -296,14 +296,14 @@ async def chat(req: ChatRequest):
         intent_confidence=intent_result.confidence,
     )
 
-    # 3. 执行
+    # 3. execute
     result = await _orchestrator.run(orch_req)
 
-    # 4. 写入记忆
+    # 4. write memory
     await _memory.add_message(req.user_id, conv_id, MsgRole.USER, req.message)
     await _memory.add_message(req.user_id, conv_id, MsgRole.ASSISTANT, result.response)
 
-    # 5. 异步更新用户画像（不阻塞响应）
+    # 5. async update of the user profile (does not block the response)
     asyncio.create_task(_memory.update_profile(req.user_id, conv_id))
 
     return ChatResponse(
@@ -328,9 +328,9 @@ async def chat(req: ChatRequest):
 
 async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) -> tuple[str, bool]:
     """
-    为 /chat 主链路构建 RAG 知识上下文。
+    Build the RAG knowledge context for the /chat pipeline.
 
-    这里复用 MCPToolManager 的查询改写、并行召回、重排、fallback 能力。
+    Reuses MCPToolManager's query rewrite, parallel recall, rerank and fallback.
     """
     if _tool_manager is None:
         return "", False
@@ -346,7 +346,7 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
         for i, item in enumerate(result.data[:top_k], start=1):
             if not isinstance(item, dict):
                 continue
-            title = str(item.get("title", "未命名文档"))
+            title = str(item.get("title", "Untitled document"))
             content = str(item.get("content", "")).strip()
             score = item.get("score", "")
             if not content:
@@ -359,17 +359,17 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
         parts.append("Answer primarily based on the knowledge above; if it is insufficient, supplement with general investment-research information, and never give individual stock buy/sell advice.")
         return "\n".join(parts), True
     except Exception as ex:
-        logger.warning(f"构建知识库上下文失败: {ex}")
+        logger.warning(f"failed to build knowledge context: {ex}")
         return "", False
 
 
 def _should_use_knowledge(message: str, intent=None) -> bool:
-    """跳过纯寒暄和护栏请求，行情/投研/合规信息类问题才检索知识库，避免无关 RAG 干扰回复。"""
+    """Skip pure greetings and guardrail requests; only market/research/compliance info questions query the KB, avoiding irrelevant RAG."""
     msg = (message or "").strip().lower()
     if not msg:
         return False
     intent_value = getattr(intent, "value", intent)
-    # 护栏(advice_request)会在编排层被拦截,这里也不触发检索,避免无谓成本
+    # advice_request is intercepted at the orchestration layer, so we also skip retrieval here to avoid wasted cost
     if intent_value in {"greeting", "feedback", "escalation", "human_handoff", "advice_request", "other"}:
         return False
     if intent_value in {
@@ -382,12 +382,12 @@ def _should_use_knowledge(message: str, intent=None) -> bool:
     if msg in greetings:
         return False
     business_keywords = [
-        # 中文
+        # Chinese
         "行情", "指数", "股价", "etf", "基金", "研报", "财报", "估值", "市盈率",
         "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "适当性",
         "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金",
         "对账单", "交割单", "费率", "佣金", "涨跌停", "t+1", "术语",
-        # 英文
+        # English
         "market", "index", "quote", "etf", "fund", "research", "financial", "valuation",
         "p/e", "roe", "factor", "backtest", "sharpe", "drawdown", "fundamental",
         "suitability", "risk level", "risk rating", "risk disclosure", "account",
@@ -399,7 +399,7 @@ def _should_use_knowledge(message: str, intent=None) -> bool:
 
 @app.get("/monitor")
 async def monitor_summary():
-    """实时监控摘要：Agent 成功率、工具统计、告警、优化建议。"""
+    """Live monitoring summary: agent success rates, tool stats, alerts, suggestions."""
     if _monitor is None:
         raise HTTPException(503, "Service not ready")
     return _monitor.summary()
@@ -407,15 +407,15 @@ async def monitor_summary():
 
 @app.get("/metrics")
 async def prometheus_metrics():
-    """Prometheus 指标入口。"""
+    """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/search")
 async def search(query: str, top_k: int = 5):
     """
-    演示检索优化链路：查询改写 → 并行召回 → 重排 → Top-K。
-    展示 MCP 工具调用的核心亮点。
+    Demonstrate the retrieval pipeline: query rewrite -> parallel recall -> rerank -> Top-K.
+    Showcases the core of MCP tool calling.
     """
     if _tool_manager is None:
         raise HTTPException(503, "Service not ready")
@@ -424,25 +424,25 @@ async def search(query: str, top_k: int = 5):
 
 
 class DocInput(BaseModel):
-    """单篇文档输入。"""
+    """Single-document input."""
     title:   str
     content: str
 
 
 class BatchDocInput(BaseModel):
-    """批量文档导入请求体。"""
+    """Batch document import body."""
     documents: List[DocInput]
 
 
 class EvalIntentInput(BaseModel):
-    """意图识别评测用例。"""
+    """Intent-recognition test case."""
     message: str
     expected_intent: str
     context: Optional[Dict[str, Any]] = None
 
 
 class EvalDialogInput(BaseModel):
-    """对话质量评测用例。question 单轮，turns 多轮。"""
+    """Dialogue-quality test case. `question` for single turn, `turns` for multi-turn."""
     question: Optional[str] = None
     turns: Optional[List[str]] = None
     user_id: Optional[str] = None
@@ -450,7 +450,7 @@ class EvalDialogInput(BaseModel):
 
 
 class EvalRunInput(BaseModel):
-    """评测请求。为空时使用内置默认用例。"""
+    """Evaluation request. Uses built-in default cases when empty."""
     intent_cases: Optional[List[EvalIntentInput]] = None
     dialog_cases: Optional[List[EvalDialogInput]] = None
 
@@ -458,16 +458,16 @@ class EvalRunInput(BaseModel):
 @app.post("/knowledge/add", tags=["Knowledge"])
 async def add_knowledge(body: BatchDocInput):
     """
-    批量导入文档到知识库。
+    Batch-import documents into the knowledge base.
 
-    文档会自动切片（每片 500 字）并存入 ChromaDB，ChromaDB 内置 Embedding 模型自动向量化。
+    Documents are auto-chunked (~500 chars) and stored in ChromaDB, which vectorizes them with its built-in embedding model.
 
-    示例请求体：
+    Example request body:
     ```json
     {
       "documents": [
-        {"title": "ETF产品说明", "content": "沪深300ETF跟踪沪深300指数，管理费率0.5%，采用实物申赎..."},
-        {"title": "投资者适当性", "content": "个人投资者风险等级分为C1-C5，需与产品风险R1-R5匹配..."}
+        {"title": "ETF Product Guide", "content": "The CSI 300 ETF tracks the CSI 300 index, management fee 0.5%, in-kind creation/redemption..."},
+        {"title": "Investor Suitability", "content": "Individual investor risk grades run C1-C5 and must match product risk R1-R5..."}
       ]
     }
     ```
@@ -478,19 +478,19 @@ async def add_knowledge(body: BatchDocInput):
     kb = tool.handler.__self__
     count = await kb.add_documents_async([{"title": d.title, "content": d.content} for d in body.documents])
     total = await kb.doc_count_async()
-    return {"message": f"成功导入 {count} 个文档片段", "added_chunks": count, "total_chunks": total}
+    return {"message": f"Imported {count} document chunks", "added_chunks": count, "total_chunks": total}
 
 
 @app.post("/knowledge/upload", tags=["Knowledge"])
 async def upload_knowledge(file: UploadFile = File(...)):
     """
-    上传文件导入知识库。
+    Upload a file to import into the knowledge base.
 
-    支持格式：
-    - `.txt` / `.md`：整个文件作为一篇文档，文件名作为标题
-    - `.json`：JSON 数组格式 `[{"title": "...", "content": "..."}, ...]`
+    Supported formats:
+    - `.txt` / `.md`: the whole file as one document, filename as the title
+    - `.json`: a JSON array `[{"title": "...", "content": "..."}, ...]`
 
-    文件大小限制：10MB
+    File size limit: 10MB
     """
     tool = _tool_manager._tools.get("knowledge_search") if _tool_manager else None
     if tool is None:
@@ -499,7 +499,7 @@ async def upload_knowledge(file: UploadFile = File(...)):
 
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(413, "文件大小超过 10MB 限制")
+        raise HTTPException(413, "File exceeds the 10MB limit")
 
     text = content.decode("utf-8", errors="ignore")
     filename = file.filename or "unknown"
@@ -509,18 +509,18 @@ async def upload_knowledge(file: UploadFile = File(...)):
         try:
             docs = _json.loads(text)
             if not isinstance(docs, list):
-                raise HTTPException(400, "JSON 文件应为数组格式: [{title, content}, ...]")
+                raise HTTPException(400, "JSON file must be an array: [{title, content}, ...]")
         except _json.JSONDecodeError as e:
-            raise HTTPException(400, f"JSON 解析失败: {e}")
+            raise HTTPException(400, f"JSON parse failed: {e}")
     else:
-        # txt / md：整个文件作为一篇文档
+        # txt / md: the whole file as one document
         title = filename.rsplit(".", 1)[0] if "." in filename else filename
         docs = [{"title": title, "content": text}]
 
     count = await kb.add_documents_async(docs)
     total = await kb.doc_count_async()
     return {
-        "message": f"文件 {filename} 导入成功",
+        "message": f"File {filename} imported successfully",
         "added_chunks": count,
         "total_chunks": total,
     }
@@ -528,7 +528,7 @@ async def upload_knowledge(file: UploadFile = File(...)):
 
 @app.get("/knowledge/stats", tags=["Knowledge"])
 async def knowledge_stats():
-    """查看知识库统计信息（文档片段总数）。"""
+    """Knowledge-base stats (total document chunks)."""
     tool = _tool_manager._tools.get("knowledge_search") if _tool_manager else None
     if tool is None:
         raise HTTPException(503, "Knowledge base not initialized")
@@ -538,7 +538,7 @@ async def knowledge_stats():
 
 @app.post("/eval/run")
 async def run_eval(body: Optional[EvalRunInput] = None):
-    """运行内置评测用例，返回评测报告。"""
+    """Run the built-in evaluation cases and return the report."""
     if _evaluator is None:
         raise HTTPException(503, "Service not ready")
     from evaluation.evaluator import DEFAULT_DIALOG_CASES, DEFAULT_INTENT_CASES, IntentTestCase
@@ -587,7 +587,7 @@ async def run_eval(body: Optional[EvalRunInput] = None):
     }
 
 
-# ── 交互式 CLI ────────────────────────────────────────────────────────────────
+# ── Interactive CLI ──────────────────────────────────────────────────────────
 async def _cli():
     print(BANNER)
     print("AlphaMind CLI — type 'quit' to exit\n")
@@ -622,12 +622,12 @@ async def _cli():
 
     while True:
         try:
-            msg = input("你: ").strip()
+            msg = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n再见 ʕ•ᴥ•ʔ")
+            print("\nGoodbye")
             break
         if not msg or msg.lower() in ("quit", "exit", "退出"):
-            print("再见 ʕ•ᴥ•ʔ")
+            print("Goodbye")
             break
 
         ctx = await mem.get_context(user_id, conv_id, query=msg)
