@@ -1,26 +1,26 @@
 [
   {
-    "title": "AlphaMind 产品介绍",
-    "content": "AlphaMind 是一款证券投研智能咨询助手。它基于大语言模型，能够理解用户的自然语言提问，自动识别意图并路由到行情与信息、投研与分析、合规与适当性等专业 Agent 处理。AlphaMind 提供证券投研信息问答、投资者教育和研报/数据检索，并内置投资建议护栏：当用户索要荐股、择时、保收益或代客操作时，会拦截并给出风险揭示、转接人工投顾。AlphaMind 不构成投资建议、不荐股、不承诺收益、不代客操作。"
+    "title": "AlphaMind Product Overview",
+    "content": "AlphaMind is a securities investment-research assistant. Built on large language models, it understands natural-language questions, classifies intent, and routes to specialized agents for Market & Information, Research & Analysis, and Compliance & Suitability. AlphaMind provides securities research Q&A, investor education and report/data retrieval, and includes an investment-advice guardrail: when a user asks for stock recommendations, market timing, guaranteed returns, or trading on their behalf, it intercepts the request, gives a risk disclosure, and escalates to a human advisor. AlphaMind does not constitute investment advice; it does not recommend stocks, promise returns, or trade on your behalf."
   },
   {
-    "title": "融资融券基础",
-    "content": "融资融券（两融）是带杠杆的信用交易，属于高风险业务（通常为 R4/R5 风险等级）。融资是借钱买入证券，融券是借券卖出。开通两融一般要求近 20 个交易日日均资产不低于 50 万元并有相应交易经验，需通过适当性评估与知识测试。两融存在维持担保比例要求，行情不利时可能被追加保证金甚至强制平仓，亏损会被杠杆放大。"
+    "title": "Margin Trading & Securities Lending Basics",
+    "content": "Margin trading and securities lending is leveraged credit trading and is high risk (typically R4/R5). Margin financing means borrowing money to buy securities; securities lending means borrowing shares to sell. Opening this service usually requires average assets of at least 500,000 CNY over the prior 20 trading days and relevant trading experience, plus passing a suitability assessment and knowledge test. It has a maintenance margin requirement; in adverse markets you may face margin calls or forced liquidation, and losses are amplified by leverage."
   },
   {
-    "title": "打新股规则",
-    "content": "网上申购新股（打新）需持有一定市值的股票作为配号依据，沪深两市市值分别计算，通常按 T-2 日前若干交易日的日均市值确定可申购额度。中签后需在规定日期（一般为 T+2）保证账户有足额资金缴款，连续 12 个月内累计 3 次中签未足额缴款将被暂停申购资格。新股上市初期波动较大，需注意涨跌幅规则与风险。"
+    "title": "New Share Subscription (IPO) Rules",
+    "content": "Online IPO subscription requires holding a certain market value of shares as the basis for allocation numbers; Shanghai and Shenzhen market values are counted separately, usually based on the average daily holding value over several trading days before T-2. If allotted, you must have sufficient funds in the account to pay by the set date (usually T+2); failing to fully pay three times within 12 months suspends your subscription eligibility. Newly listed shares are highly volatile early on; mind the price-limit rules and risks."
   },
   {
-    "title": "分红、送股与除权除息",
-    "content": "上市公司利润分配包括现金分红（派息）和送股/转增股本。股权登记日持有股票的股东享有分红权利。除权除息日当天，股价会相应下调以剔除已分配部分，因此账户市值短期内通常不会因分红而增加。现金分红可能涉及个人所得税，税率与持股时间挂钩，持股时间越长税负越低。"
+    "title": "Dividends, Bonus Shares & Ex-Rights/Ex-Dividend",
+    "content": "Listed-company profit distribution includes cash dividends and bonus/transfer shares. Shareholders holding shares on the record date are entitled to the dividend. On the ex-rights/ex-dividend date, the share price is adjusted down to remove the distributed portion, so account market value does not usually increase in the short term due to a dividend. Cash dividends may involve personal income tax, with the rate tied to holding period; the longer you hold, the lower the tax."
   },
   {
-    "title": "停牌与复牌",
-    "content": "股票停牌是指暂停交易，常见原因包括重大资产重组、重要信息披露、股价异常波动核查等。停牌期间无法买卖，复牌后价格可能因积累的信息而大幅波动。投资者应关注公司公告了解停牌原因与预计复牌时间，避免在信息不明时盲目决策。"
+    "title": "Trading Suspension & Resumption",
+    "content": "A trading suspension means trading is temporarily halted; common reasons include major asset restructuring, important disclosures, or price-anomaly reviews. Shares cannot be traded during suspension, and prices may swing sharply on resumption as accumulated information is priced in. Investors should follow company announcements for the reason and expected resumption time, and avoid blind decisions while information is unclear."
   },
   {
-    "title": "沪深港通简介",
-    "content": "沪深港通是内地与香港市场互联互通机制，包括沪股通、深股通（北向）与港股通（南向）。港股通允许符合条件的内地投资者买卖规定范围内的港股，通常要求证券账户及资金账户资产不低于 50 万元并通过风险测评。港股通存在汇率风险、交易日历差异和标的范围限制，交易规则与 A 股不同，例如港股无涨跌停限制。"
+    "title": "Stock Connect Overview",
+    "content": "Stock Connect is the mutual-market-access scheme between the mainland and Hong Kong, including Shanghai/Shenzhen Connect (northbound) and Hong Kong Connect (southbound). Hong Kong Connect lets eligible mainland investors trade eligible Hong Kong stocks, typically requiring securities and cash account assets of at least 500,000 CNY and passing a risk assessment. It carries FX risk, trading-calendar differences (the two markets' holidays do not fully align), and instrument-scope limits, and its rules differ from A-shares (for example, Hong Kong stocks have no daily price limit)."
   }
 ]

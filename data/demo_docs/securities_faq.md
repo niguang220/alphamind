@@ -1,37 +1,37 @@
-# AlphaMind 证券投研常见问题
+# AlphaMind Securities Research FAQ
 
-## 交易规则
+## Trading Rules
 
-### A 股为什么当天买了不能卖？
-A 股实行 T+1 结算制度：当日买入的股票要到下一个交易日才能卖出，卖出所得资金 T+1 可取。
+### Why can't I sell A-shares the same day I buy them?
+A-shares use T+1 settlement: shares bought today can only be sold the next trading day, and proceeds from a sale are available T+1.
 
-### 涨跌停是怎么规定的？
-- 主板：±10%
-- 创业板 / 科创板：±20%
-- ST、*ST 股票：±5%
-新股上市初期另有特殊规则。
+### How are price limits set?
+- Main Board: +/-10%
+- ChiNext / STAR Market: +/-20%
+- ST / *ST stocks: +/-5%
+Newly listed shares have special early rules.
 
-### 交易费用有哪些？
-- 佣金：双向收取，通常不超过成交额的 0.03% 左右，且有最低 5 元。
-- 印花税：卖出单边收取，税率 0.05%。
-- 过户费：沪深按成交额约 0.001% 收取。
+### What trading fees are there?
+- Commission: charged on both sides, usually up to about 0.03% of turnover, with a minimum around 5 CNY.
+- Stamp duty: charged on the sell side only, at 0.05%.
+- Transfer fee: about 0.001% of turnover.
 
-## 账户与资金
+## Accounts & Funds
 
-### 怎么办理银证转账？
-资金实行第三方存管，通过绑定的银行卡在交易日规定时段进行银证转账（入金/出金），到账时间以券商与银行为准。
+### How do I do a bank-securities transfer?
+Funds use third-party depository; you move money via bank-securities transfer through your linked bank card during designated windows on trading days. Timing depends on your broker and bank.
 
-### 忘记资金密码/交易密码怎么办？
-请通过券商官方 App 或营业部按流程重置。注意：任何正规客服或投资顾问都不会向你索要密码或验证码。
+### I forgot my fund/trading password. What should I do?
+Reset it through your broker's official app or branch following the standard process. Note: no legitimate customer service or investment advisor will ever ask you for your password or verification code.
 
-## 适当性与风险
+## Suitability & Risk
 
-### 风险等级 R1-R5 是什么意思？
-产品风险从 R1（低）到 R5（高）分为五级；投资者风险承受能力从 C1（保守）到 C5（激进）分为五级。购买时客户风险等级应不低于产品风险等级，超风险购买需额外风险提示。
+### What do risk ratings R1-R5 mean?
+Product risk runs from R1 (low) to R5 (high); investor risk tolerance runs from C1 (conservative) to C5 (aggressive). When buying, your risk grade should be no lower than the product's; buying above your grade requires extra risk warnings.
 
-### 为什么有的产品我买不了？
-可能因为你的风险测评等级低于该产品风险等级（适当性不匹配），或该产品有资产/经验门槛（如两融、期权、港股通通常要求 50 万元资产）。
+### Why can't I buy certain products?
+It may be because your risk-assessment grade is below the product's risk grade (suitability mismatch), or the product has asset/experience thresholds (e.g., margin trading, options, and Stock Connect typically require 500,000 CNY in assets).
 
-## 重要提示
+## Important Notice
 
-AlphaMind 仅提供证券投研信息与投资者教育，**不构成投资建议**，不荐股、不预测涨跌、不承诺收益、不代客操作。具体买卖决策请咨询持牌投资顾问并独立判断。
+AlphaMind only provides securities research information and investor education. It **does not constitute investment advice**; it does not recommend stocks, predict price movements, promise returns, or trade on your behalf. For specific buy/sell decisions, consult a licensed investment advisor and judge independently.

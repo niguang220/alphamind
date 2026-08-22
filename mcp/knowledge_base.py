@@ -61,7 +61,7 @@ class KnowledgeBase:
         # 本地模式时也不传，使用 ChromaDB 默认的（会触发模型下载）
         self._collection = self._client.get_or_create_collection(
             name=self.COLLECTION_NAME,
-            metadata={"description": "AlphaMind RAG 知识库"},
+            metadata={"description": "AlphaMind RAG knowledge base"},
         )
 
         # 如果知识库为空，导入默认文档
@@ -184,99 +184,99 @@ class KnowledgeBase:
         return chunks
 
     def _load_default_docs(self) -> None:
-        """导入默认知识库文档（证券投研场景常见问题）。"""
+        """Load default knowledge base documents (common securities-research topics)."""
         default_docs = [
             {
-                "title": "常见投资术语与指标词典",
+                "title": "Common Investment Terms & Metrics Glossary",
                 "content": (
-                    "常见投资术语与财务指标说明。"
-                    "市盈率（PE）：股价除以每股收益，衡量估值高低，可与行业或历史分位比较。"
-                    "市净率（PB）：股价除以每股净资产，常用于重资产或金融行业估值。"
-                    "净资产收益率（ROE）：净利润除以净资产，衡量股东回报能力。"
-                    "每股收益（EPS）：净利润除以总股本。"
-                    "夏普比率：单位风险（波动率）所获得的超额收益，越高越好。"
-                    "最大回撤：区间内从最高点到最低点的最大跌幅，衡量下行风险。"
-                    "Beta：衡量个股相对大盘的波动敏感度，Beta>1 波动大于大盘。"
-                    "波动率：收益率的标准差，反映价格波动剧烈程度。"
-                    "换手率：成交量占流通股本的比例，反映交投活跃度。"
+                    "Glossary of common investment terms and financial metrics. "
+                    "P/E ratio: price divided by earnings per share; gauges valuation, compared across peers or history. "
+                    "P/B ratio: price divided by net assets per share; often used for asset-heavy or financial firms. "
+                    "ROE: net profit divided by equity; measures shareholder return. "
+                    "EPS: net profit divided by total shares. "
+                    "Sharpe ratio: excess return per unit of risk (volatility); higher is better. "
+                    "Maximum drawdown: the largest peak-to-trough decline over a period; measures downside risk. "
+                    "Beta: sensitivity of a stock relative to the market; Beta above 1 means larger swings than the market. "
+                    "Volatility: standard deviation of returns. Turnover: volume as a share of float, showing trading activity."
                 ),
             },
             {
-                "title": "ETF 产品说明",
+                "title": "ETF Product Guide",
                 "content": (
-                    "ETF（交易型开放式指数基金）说明。"
-                    "宽基 ETF 跟踪沪深300、中证500、创业板等综合指数；行业 ETF 跟踪某一行业；跨境 ETF 跟踪境外指数。"
-                    "管理费与托管费合计通常在 0.2%-0.6%/年，宽基 ETF 费率普遍较低。"
-                    "跟踪误差衡量 ETF 净值与标的指数的偏离，越小说明复制越紧密。"
-                    "场内 ETF 可像股票一样 T+1 买卖；申赎以一篮子成分股进行，可能产生折溢价。"
-                    "折溢价率＝（市价−净值）/净值，长期大幅溢价需警惕。"
+                    "About ETFs (Exchange-Traded Funds). "
+                    "Broad-based ETFs track composite indices such as CSI 300, CSI 500 or ChiNext; sector ETFs track an industry; "
+                    "cross-border ETFs track overseas indices. "
+                    "Total management and custody fees are usually 0.2 to 0.6 percent per year, with broad-based ETFs generally cheaper. "
+                    "Tracking error measures how closely the ETF NAV follows its index; smaller is better. "
+                    "On-exchange ETFs trade like stocks under T+1; creation and redemption use a basket of constituents and may show a premium or discount. "
+                    "Premium/discount equals (market price minus NAV) divided by NAV; a persistent large premium warrants caution."
                 ),
             },
             {
-                "title": "投资者适当性与风险等级",
+                "title": "Investor Suitability & Risk Ratings",
                 "content": (
-                    "投资者适当性管理说明。"
-                    "个人投资者风险承受能力通常分为 C1（保守）到 C5（激进）五级。"
-                    "产品风险等级分为 R1（低）到 R5（高）五级。"
-                    "适当性原则要求把合适的产品卖给合适的投资者，客户风险等级应不低于产品风险等级。"
-                    "例如 R2 稳健型客户通常不匹配 R5 高风险产品（如两融、期权、部分私募）。"
-                    "首次购买高风险产品或超风险等级购买需进行风险提示与双录（录音录像）。"
-                    "风险测评结果一般有效期约两年，到期或情况变化需重新测评。"
+                    "About investor suitability management. "
+                    "An individual investor risk tolerance is usually graded from C1 (conservative) to C5 (aggressive). "
+                    "Product risk is graded from R1 (low) to R5 (high). "
+                    "The suitability principle requires matching the right product to the right investor; the client risk grade should be no lower than the product risk grade. "
+                    "For example, an R2 conservative client generally does not match an R5 high-risk product such as margin trading, options or some private funds. "
+                    "Buying a high-risk product for the first time or above one risk grade requires risk warnings and audio/video recording. "
+                    "A risk assessment is typically valid for about two years and must be redone when it expires or circumstances change."
                 ),
             },
             {
-                "title": "证券交易规则",
+                "title": "Securities Trading Rules",
                 "content": (
-                    "A 股证券交易规则说明。"
-                    "结算制度为 T+1：当日买入的股票次一交易日才能卖出，资金 T+1 可取。"
-                    "涨跌停：主板 ±10%，创业板/科创板 ±20%，ST 股票 ±5%。"
-                    "交易时段：集合竞价 9:15-9:25，连续竞价 9:30-11:30 与 13:00-15:00。"
-                    "交易费用包含佣金（双向，通常不超过成交额 0.03% 左右且有最低 5 元）、"
-                    "印花税（卖出单边收取 0.05%）、过户费（沪深按成交额 0.001% 左右）。"
+                    "A-share securities trading rules. "
+                    "Settlement is T+1: shares bought today can be sold the next trading day; cash is available T+1. "
+                    "Price limits: Main Board plus or minus 10 percent, ChiNext and STAR Market plus or minus 20 percent, ST stocks plus or minus 5 percent. "
+                    "Trading hours: call auction 9:15 to 9:25, continuous auction 9:30 to 11:30 and 13:00 to 15:00. "
+                    "Fees include commission (both sides, usually up to about 0.03 percent of turnover with a minimum around 5 CNY), "
+                    "stamp duty (0.05 percent, charged on the sell side only), and a transfer fee (about 0.001 percent of turnover)."
                 ),
             },
             {
-                "title": "风险揭示书要点",
+                "title": "Risk Disclosure Essentials",
                 "content": (
-                    "证券投资风险揭示要点。"
-                    "市场风险：价格受宏观、行业、公司基本面与情绪影响而波动，可能导致本金亏损。"
-                    "流动性风险：部分标的成交清淡，可能无法及时以合理价格买卖。"
-                    "信用风险：债券等发行主体可能违约。"
-                    "杠杆风险：融资融券、期权等带杠杆，亏损可能被放大甚至爆仓强平。"
-                    "汇率风险：跨境投资受汇率波动影响。"
-                    "历史业绩不代表未来表现，任何机构和个人都不得承诺保本或保收益。"
+                    "Key risk disclosures for securities investing. "
+                    "Market risk: prices swing with macro, sector, fundamentals and sentiment, and may cause principal loss. "
+                    "Liquidity risk: some instruments trade thinly and may not be bought or sold in time at a fair price. "
+                    "Credit risk: bond issuers may default. "
+                    "Leverage risk: margin trading and options carry leverage; losses can be amplified and may lead to forced liquidation. "
+                    "Currency risk: cross-border investing is exposed to FX moves. "
+                    "Past performance does not indicate future results; no institution or individual may promise principal protection or returns."
                 ),
             },
             {
-                "title": "开户与账户管理",
+                "title": "Account Opening & Management",
                 "content": (
-                    "证券开户与账户管理说明。"
-                    "开户需完成实名认证（KYC）、风险测评并签署相关协议。"
-                    "资金实行第三方存管，证券账户与绑定的银行卡通过银证转账划转资金。"
-                    "银证转账一般在交易日的规定时段办理，出入金到账时间以券商与银行为准。"
-                    "销户需先清空持仓与资金并了结未了事项。"
-                    "账户安全：不要向任何人泄露账户密码与验证码，正规券商机构与投顾不会索要密码。"
+                    "Securities account opening and management. "
+                    "Opening an account requires identity verification (KYC), a risk assessment, and signing the relevant agreements. "
+                    "Funds use third-party depository; money moves between the securities account and the linked bank card via bank-securities transfer. "
+                    "Bank-securities transfers are processed during designated windows on trading days; deposit and withdrawal timing depends on the broker and bank. "
+                    "Closing an account requires clearing positions and cash and settling any outstanding items. "
+                    "Account security: never disclose your account password or verification codes; legitimate staff and advisors will never ask for them."
                 ),
             },
             {
-                "title": "财报与基本面解读指引",
+                "title": "Financial Statement & Fundamentals Reading Guide",
                 "content": (
-                    "财报与基本面解读指引。"
-                    "三大报表：利润表反映盈利能力，资产负债表反映财务状况，现金流量表反映现金流。"
-                    "营业收入与净利润反映规模与盈利，需关注同比/环比增速与稳定性。"
-                    "毛利率＝（营收−营业成本）/营收，反映产品竞争力。"
-                    "经营性现金流应与净利润相互印证，长期净利高而现金流差需警惕。"
-                    "分析应结合行业景气、可比公司与历史区间，避免只看单一指标下结论。"
+                    "Guide to reading financial statements and fundamentals. "
+                    "Three statements: the income statement shows profitability, the balance sheet shows financial position, and the cash flow statement shows cash flows. "
+                    "Revenue and net profit show scale and profitability; watch year-over-year and quarter-over-quarter growth and its stability. "
+                    "Gross margin equals (revenue minus cost of sales) divided by revenue, reflecting product competitiveness. "
+                    "Operating cash flow should corroborate net profit; high net profit with weak cash flow warrants caution. "
+                    "Analysis should combine industry cycle, comparable companies and historical ranges, not a single metric in isolation."
                 ),
             },
             {
-                "title": "合规红线与投资者教育",
+                "title": "Compliance Red Lines & Investor Education",
                 "content": (
-                    "合规红线与投资者教育。"
-                    "本平台仅提供证券投研信息、数据检索与投资者教育，不构成投资建议。"
-                    "不荐股、不预测点位、不承诺收益、不代客理财或代客下单。"
-                    "涉及具体买卖决策请咨询持牌投资顾问，并结合自身风险承受能力独立判断。"
-                    "理性投资，坚持长期视角，警惕‘保本高收益’‘内幕消息’‘稳赚不赔’等违规话术与诈骗。"
+                    "Compliance red lines and investor education. "
+                    "This platform only provides securities research information, data retrieval and investor education; it does not constitute investment advice. "
+                    "It does not recommend stocks, predict price levels, promise returns, or manage or trade on a client behalf. "
+                    "For specific buy or sell decisions, consult a licensed investment advisor and judge independently based on your own risk tolerance. "
+                    "Invest rationally with a long-term view; beware of illegal or fraudulent pitches such as guaranteed high returns, inside information or sure profits."
                 ),
             },
         ]
