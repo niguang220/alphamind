@@ -6,7 +6,7 @@
 路由策略（三层决策）：
   1. 意图路由 —— 根据 IntentCategory 直接映射到专属 Agent
   2. 性能路由 —— 同类 Agent 有多个时，选成功率最高、延迟最低的
-  3. 降级路由 —— 专属 Agent 不可用时，自动降级到 GeneralAgent
+  3. 降级路由 —— 专属 Agent 不可用时，自动降级到 MarketAgent
 
 并行协作：
   - 复杂问题（如"技术问题 + 账单问题"）可同时派发给多个 Agent
@@ -35,10 +35,10 @@ logger = logging.getLogger(__name__)
 # ── 数据结构 ──────────────────────────────────────────────────────────────────
 
 class AgentType(Enum):
-    GENERAL   = "general"    # 通用客服
-    TECHNICAL = "technical"  # 技术支持
-    BILLING   = "billing"    # 账单/退款
-    ESCALATION = "escalation" # 人工升级（占位）
+    MARKET     = "market"      # 行情与信息
+    RESEARCH   = "research"    # 投研与分析
+    COMPLIANCE = "compliance"  # 合规与适当性
+    ESCALATION = "escalation"  # 人工投顾升级
 
 
 @dataclass
@@ -195,31 +195,36 @@ class BaseAgent:
 
     def _needs_escalation(self, content: str) -> bool:
         """检测 Agent 是否建议升级（简单关键词检测）。"""
-        keywords = ["转人工", "人工客服", "escalate", "specialist", "无法处理"]
+        keywords = ["转人工", "人工投顾", "投资顾问", "无法处理", "escalate"]
         return any(kw in content for kw in keywords)
 
 
-class GeneralAgent(BaseAgent):
-    agent_type    = AgentType.GENERAL
+class MarketAgent(BaseAgent):
+    agent_type    = AgentType.MARKET
     system_prompt = (
-        "你是 AlphaMind 智能客服。友好、简洁地回答用户问题。"
-        "如果问题超出你的能力范围，明确说明并建议转接专业客服。"
+        "你是 AlphaMind 的行情与信息助手。客观、中立地提供行情、指数、个股/ETF 产品信息和术语解释。"
+        "只做信息陈述，不预测涨跌、不给买卖建议。涉及具体买卖决策时，提示这属于投资决策并建议咨询持牌投顾。"
+        "如信息可能有时效性，提醒用户以实时行情为准。"
     )
 
 
-class TechnicalAgent(BaseAgent):
-    agent_type    = AgentType.TECHNICAL
+class ResearchAgent(BaseAgent):
+    agent_type    = AgentType.RESEARCH
     system_prompt = (
-        "你是技术支持专家。专注于：故障排查、错误诊断、系统配置。"
-        "提供清晰的步骤化解决方案。遇到需要后台操作的问题，说明需要升级处理。"
+        "你是 AlphaMind 的投研与分析助手。专注：研报检索与摘要、财报/基本面解读、估值与财务指标、"
+        "量化概念（因子/回测/夏普/最大回撤）。"
+        "只做客观分析，同时呈现多空两面与风险，不下买卖结论、不荐股、不预测点位。"
+        "引用数据时说明口径与时效，并提醒历史数据不代表未来表现。"
     )
 
 
-class BillingAgent(BaseAgent):
-    agent_type    = AgentType.BILLING
+class ComplianceAgent(BaseAgent):
+    agent_type    = AgentType.COMPLIANCE
     system_prompt = (
-        "你是账单服务专家。专注于：账单查询、退款申请、发票问题、订阅管理。"
-        "对财务问题保持准确和专业。涉及实际退款操作时，说明需要人工审核。"
+        "你是 AlphaMind 的合规与适当性助手。专注：投资者适当性与风险等级（R1-R5）、风险揭示、开户/账户、"
+        "出入金与银证转账、交易规则与费率、对账单。"
+        "严格遵守合规底线：不荐股、不承诺收益、不代客操作、不索要账户密码。"
+        "当用户风险等级与产品风险不匹配，或涉及高风险产品时，明确提示并建议转人工投顾核验。"
     )
 
 
@@ -232,23 +237,24 @@ class AgentOrchestrator:
     路由逻辑（三层）：
       1. 意图 → Agent 类型映射
       2. 同类多实例时按 routing_score() 选最优
-      3. 专属 Agent 失败时降级到 GeneralAgent
+      3. 专属 Agent 失败时降级到 MarketAgent
     """
 
     # 意图 → Agent 类型的静态映射（路由表）
     _INTENT_ROUTING: Dict[IntentCategory, AgentType] = {
-        IntentCategory.TECHNICAL:  AgentType.TECHNICAL,
-        IntentCategory.TECHNICAL_LOGIN: AgentType.TECHNICAL,
-        IntentCategory.TECHNICAL_CRASH: AgentType.TECHNICAL,
-        IntentCategory.BILLING:    AgentType.BILLING,
-        IntentCategory.REFUND:     AgentType.BILLING,
-        IntentCategory.INVOICE:    AgentType.BILLING,
-        IntentCategory.PAYMENT_ISSUE: AgentType.BILLING,
-        IntentCategory.ACCOUNT:    AgentType.BILLING,
-        IntentCategory.ACCOUNT_SECURITY: AgentType.BILLING,
-        IntentCategory.ESCALATION: AgentType.ESCALATION,
-        IntentCategory.HUMAN_HANDOFF: AgentType.ESCALATION,
-        # 其余意图 → GENERAL（默认）
+        IntentCategory.RESEARCH_REPORT: AgentType.RESEARCH,
+        IntentCategory.FUNDAMENTAL:     AgentType.RESEARCH,
+        IntentCategory.VALUATION:       AgentType.RESEARCH,
+        IntentCategory.COMPARISON:      AgentType.RESEARCH,
+        IntentCategory.QUANT_CONCEPT:   AgentType.RESEARCH,
+        IntentCategory.ACCOUNT:         AgentType.COMPLIANCE,
+        IntentCategory.FUNDING:         AgentType.COMPLIANCE,
+        IntentCategory.SUITABILITY:     AgentType.COMPLIANCE,
+        IntentCategory.RISK_DISCLOSURE: AgentType.COMPLIANCE,
+        IntentCategory.STATEMENT:       AgentType.COMPLIANCE,
+        IntentCategory.ESCALATION:      AgentType.ESCALATION,
+        IntentCategory.HUMAN_HANDOFF:   AgentType.ESCALATION,
+        # market 组及其余意图 → MARKET（默认）
     }
 
     def __init__(
@@ -268,9 +274,9 @@ class AgentOrchestrator:
 
         # Agent 池：每种类型可有多个实例（水平扩展）
         self._pool: Dict[AgentType, List[BaseAgent]] = {
-            AgentType.GENERAL:   [GeneralAgent(client, model, skill_manager)],
-            AgentType.TECHNICAL: [TechnicalAgent(client, model, skill_manager)],
-            AgentType.BILLING:   [BillingAgent(client, model, skill_manager)],
+            AgentType.MARKET:     [MarketAgent(client, model, skill_manager)],
+            AgentType.RESEARCH:   [ResearchAgent(client, model, skill_manager)],
+            AgentType.COMPLIANCE: [ComplianceAgent(client, model, skill_manager)],
         }
 
     def set_skill_manager(self, skill_manager: Optional[Any]) -> None:
@@ -308,13 +314,13 @@ class AgentOrchestrator:
         if self._needs_clarification(req):
             return OrchestratorResult(
                 request_id=req.request_id,
-                response="我还不能确定您要处理的是哪类问题。请补充一下是订单物流、退款账单、账户资料，还是技术故障？",
-                agent_type=AgentType.GENERAL,
+                response="我还不能确定您的问题类别。请问是行情/产品信息、投研分析（研报/估值/财报），还是账户/适当性/交易规则？",
+                agent_type=AgentType.MARKET,
                 intent=req.intent,
                 escalated=False,
                 latency_ms=(time.monotonic() - t0) * 1000,
-                agent_types=[AgentType.GENERAL],
-                primary_agent=AgentType.GENERAL,
+                agent_types=[AgentType.MARKET],
+                primary_agent=AgentType.MARKET,
                 routing_reason="低置信度 OTHER 意图，先澄清用户需求",
                 routing_confidence=req.intent_confidence,
             )
@@ -406,7 +412,7 @@ class AgentOrchestrator:
             if target in self._pool and self._pool[target]:
                 return target
 
-        return AgentType.GENERAL
+        return AgentType.MARKET
 
     def _route_decision(self, req: Request) -> RoutingDecision:
         """
@@ -433,12 +439,12 @@ class AgentOrchestrator:
         available_scores = {
             agent_type: score
             for agent_type, score in scores.items()
-            if agent_type == AgentType.GENERAL or self._pool.get(agent_type)
+            if agent_type == AgentType.MARKET or self._pool.get(agent_type)
         }
         if not available_scores:
             return RoutingDecision(
-                primary_agent=AgentType.GENERAL,
-                reason="无可用专属 Agent，降级到 GeneralAgent",
+                primary_agent=AgentType.MARKET,
+                reason="无可用专属 Agent，降级到 MarketAgent",
                 confidence=0.1,
             )
 
@@ -447,7 +453,7 @@ class AgentOrchestrator:
         supporting_agents = [
             agent_type
             for agent_type, score in ordered[1:]
-            if agent_type != AgentType.GENERAL and score >= 0.45 and score >= primary_score * 0.55
+            if agent_type != AgentType.MARKET and score >= 0.45 and score >= primary_score * 0.55
         ]
 
         reason = self._routing_reason(req, available_scores, primary_agent, supporting_agents)
@@ -462,59 +468,60 @@ class AgentOrchestrator:
         """按意图、关键词和实体为各领域 Agent 打分。"""
         msg = req.message.lower()
         scores = {
-            AgentType.GENERAL: 0.1,
-            AgentType.TECHNICAL: 0.0,
-            AgentType.BILLING: 0.0,
+            AgentType.MARKET: 0.1,
+            AgentType.RESEARCH: 0.0,
+            AgentType.COMPLIANCE: 0.0,
         }
 
         if req.intent in (
-            IntentCategory.QUERY,
-            IntentCategory.ORDER_STATUS,
-            IntentCategory.LOGISTICS,
-            IntentCategory.REQUEST,
-            IntentCategory.COMPLAINT,
+            IntentCategory.MARKET_QUOTE,
+            IntentCategory.PRODUCT_INFO,
+            IntentCategory.TERM_EXPLAIN,
+            IntentCategory.TRADING_RULE,
             IntentCategory.GREETING,
             IntentCategory.FEEDBACK,
             IntentCategory.OTHER,
         ):
-            scores[AgentType.GENERAL] += 0.55
+            scores[AgentType.MARKET] += 0.55
 
         if req.intent in (
-            IntentCategory.TECHNICAL,
-            IntentCategory.TECHNICAL_LOGIN,
-            IntentCategory.TECHNICAL_CRASH,
+            IntentCategory.RESEARCH_REPORT,
+            IntentCategory.FUNDAMENTAL,
+            IntentCategory.VALUATION,
+            IntentCategory.COMPARISON,
+            IntentCategory.QUANT_CONCEPT,
         ):
-            scores[AgentType.TECHNICAL] += 0.75
+            scores[AgentType.RESEARCH] += 0.75
 
         if req.intent in (
-            IntentCategory.BILLING,
             IntentCategory.ACCOUNT,
-            IntentCategory.ACCOUNT_SECURITY,
-            IntentCategory.REFUND,
-            IntentCategory.INVOICE,
-            IntentCategory.PAYMENT_ISSUE,
+            IntentCategory.FUNDING,
+            IntentCategory.SUITABILITY,
+            IntentCategory.RISK_DISCLOSURE,
+            IntentCategory.STATEMENT,
+            IntentCategory.COMPLAINT,
         ):
-            scores[AgentType.BILLING] += 0.75
+            scores[AgentType.COMPLIANCE] += 0.75
 
-        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败", "500", "401", "验证码"]
-        billing_kws = ["退款", "退货", "扣款", "发票", "账单", "支付", "订阅", "refund", "invoice", "多扣"]
-        general_kws = ["订单", "物流", "快递", "配送", "会员", "积分", "咨询", "帮助"]
+        research_kws = ["研报", "财报", "年报", "季报", "估值", "市盈率", "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "营收", "净利润"]
+        compliance_kws = ["开户", "销户", "适当性", "风险等级", "风险测评", "风险揭示", "银证转账", "出金", "入金", "对账单", "交割单", "佣金", "费率", "r1", "r2", "r3", "r4", "r5"]
+        market_kws = ["行情", "指数", "股价", "etf", "基金", "点位", "术语", "什么意思", "涨跌停", "交易时间"]
 
-        technical_hits = sum(1 for kw in technical_kws if kw in msg)
-        billing_hits = sum(1 for kw in billing_kws if kw in msg)
-        general_hits = sum(1 for kw in general_kws if kw in msg)
+        research_hits = sum(1 for kw in research_kws if kw in msg)
+        compliance_hits = sum(1 for kw in compliance_kws if kw in msg)
+        market_hits = sum(1 for kw in market_kws if kw in msg)
 
-        scores[AgentType.TECHNICAL] += min(0.45, technical_hits * 0.18)
-        scores[AgentType.BILLING] += min(0.45, billing_hits * 0.18)
-        scores[AgentType.GENERAL] += min(0.35, general_hits * 0.12)
+        scores[AgentType.RESEARCH] += min(0.45, research_hits * 0.18)
+        scores[AgentType.COMPLIANCE] += min(0.45, compliance_hits * 0.18)
+        scores[AgentType.MARKET] += min(0.35, market_hits * 0.12)
 
         entities = req.entities or {}
-        if entities.get("error_code"):
-            scores[AgentType.TECHNICAL] += 0.2
-        if entities.get("amount"):
-            scores[AgentType.BILLING] += 0.15
-        if entities.get("order_id"):
-            scores[AgentType.GENERAL] += 0.1
+        if entities.get("metric"):
+            scores[AgentType.RESEARCH] += 0.2
+        if entities.get("risk_level"):
+            scores[AgentType.COMPLIANCE] += 0.2
+        if entities.get("ticker"):
+            scores[AgentType.RESEARCH] += 0.1
 
         return {agent_type: round(score, 3) for agent_type, score in scores.items()}
 
@@ -546,24 +553,25 @@ class AgentOrchestrator:
         msg = req.message.lower()
         targets: List[AgentType] = []
 
-        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败", "500", "401"]
-        billing_kws = ["退款", "扣款", "发票", "账单", "支付", "订阅", "refund", "invoice"]
+        research_kws = ["研报", "财报", "估值", "市盈率", "因子", "回测", "基本面", "跟踪误差", "对比"]
+        compliance_kws = ["适当性", "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金", "费率", "能买"]
 
         if req.intent in (
-            IntentCategory.TECHNICAL,
-            IntentCategory.TECHNICAL_LOGIN,
-            IntentCategory.TECHNICAL_CRASH,
-        ) or any(kw in msg for kw in technical_kws):
-            targets.append(AgentType.TECHNICAL)
+            IntentCategory.RESEARCH_REPORT,
+            IntentCategory.FUNDAMENTAL,
+            IntentCategory.VALUATION,
+            IntentCategory.COMPARISON,
+            IntentCategory.QUANT_CONCEPT,
+        ) or any(kw in msg for kw in research_kws):
+            targets.append(AgentType.RESEARCH)
         if req.intent in (
-            IntentCategory.BILLING,
             IntentCategory.ACCOUNT,
-            IntentCategory.ACCOUNT_SECURITY,
-            IntentCategory.REFUND,
-            IntentCategory.INVOICE,
-            IntentCategory.PAYMENT_ISSUE,
-        ) or any(kw in msg for kw in billing_kws):
-            targets.append(AgentType.BILLING)
+            IntentCategory.FUNDING,
+            IntentCategory.SUITABILITY,
+            IntentCategory.RISK_DISCLOSURE,
+            IntentCategory.STATEMENT,
+        ) or any(kw in msg for kw in compliance_kws):
+            targets.append(AgentType.COMPLIANCE)
 
         # 保持顺序去重，并只返回当前有实例的 Agent 类型。
         deduped = list(dict.fromkeys(targets))
@@ -590,23 +598,23 @@ class AgentOrchestrator:
         return max(agents, key=lambda a: a.stats.routing_score())
 
     async def _execute(self, req: Request, agent_type: AgentType) -> AgentResponse:
-        """执行 Agent，失败时降级到 GeneralAgent。"""
+        """执行 Agent，失败时降级到 MarketAgent。"""
         agent = self._best_agent(agent_type)
         if agent is None:
-            agent = self._best_agent(AgentType.GENERAL)
+            agent = self._best_agent(AgentType.MARKET)
         if agent is None:
             return AgentResponse(
-                agent_type=AgentType.GENERAL,
+                agent_type=AgentType.MARKET,
                 content="服务暂时不可用，请稍后重试。",
                 success=False,
             )
 
         response = await agent.handle(req)
 
-        # 专属 Agent 失败时降级到 GeneralAgent
-        if not response.success and agent_type != AgentType.GENERAL:
-            logger.warning(f"{agent_type.value} 失败，降级到 GeneralAgent")
-            fallback = self._best_agent(AgentType.GENERAL)
+        # 专属 Agent 失败时降级到 MarketAgent
+        if not response.success and agent_type != AgentType.MARKET:
+            logger.warning(f"{agent_type.value} 失败，降级到 MarketAgent")
+            fallback = self._best_agent(AgentType.MARKET)
             if fallback:
                 response = await fallback.handle(req)
 
