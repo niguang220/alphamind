@@ -459,8 +459,8 @@ async def add_knowledge(body: BatchDocInput):
     ```json
     {
       "documents": [
-        {"title": "退款政策", "content": "用户在购买后 7 天内可以申请无理由退款..."},
-        {"title": "配送说明", "content": "标准配送 3-5 个工作日..."}
+        {"title": "ETF产品说明", "content": "沪深300ETF跟踪沪深300指数，管理费率0.5%，采用实物申赎..."},
+        {"title": "投资者适当性", "content": "个人投资者风险等级分为C1-C5，需与产品风险R1-R5匹配..."}
       ]
     }
     ```
