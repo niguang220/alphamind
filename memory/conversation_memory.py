@@ -61,13 +61,13 @@ class MemoryContext:
         """将记忆上下文格式化为 LLM 可用的文本。"""
         parts = []
         if self.summary:
-            parts.append(f"[会话摘要]\n{self._clean(self.summary)}")
+            parts.append(f"[Conversation summary]\n{self._clean(self.summary)}")
         if self.relevant_history:
-            parts.append("[相关历史]\n" + "\n".join(f"- {self._clean(h)}" for h in self.relevant_history[:3]))
+            parts.append("[Relevant history]\n" + "\n".join(f"- {self._clean(h)}" for h in self.relevant_history[:3]))
         if self.user_profile:
-            parts.append(f"[用户画像]\n{json.dumps(self.user_profile, ensure_ascii=True)}")
+            parts.append(f"[User profile]\n{json.dumps(self.user_profile, ensure_ascii=True)}")
         if self.recent_messages:
-            parts.append("[最近对话]")
+            parts.append("[Recent conversation]")
             for m in self.recent_messages:
                 parts.append(f"{m.role.value}: {self._clean(m.content)}")
         return "\n\n".join(parts)
@@ -169,11 +169,11 @@ class MemoryManager:
             return
 
         text = self._safe_text("\n".join(f"{m.role.value}: {m.content}" for m in messages[-10:]))
-        prompt = f"""从以下对话中提炼用户偏好和关键实体，返回 JSON。
-对话:
+        prompt = f"""Extract the user's preferences and key entities from the conversation below and return JSON.
+Conversation:
 {text}
 
-返回格式: {{"preferences": ["..."], "entities": {{"产品": [], "问题类型": []}}}}"""
+Return format: {{"preferences": ["..."], "entities": {{"instruments": [], "topics": []}}}}"""
         prompt = self._safe_text(prompt)
 
         try:
@@ -255,7 +255,7 @@ class MemoryManager:
 
         # LLM 摘要
         text = self._safe_text("\n".join(f"{m.role.value}: {m.content}" for m in to_compress))
-        prompt = self._safe_text(f"用 2-3 句话总结以下对话的关键信息：\n{text}")
+        prompt = self._safe_text(f"Summarize the key information of the following conversation in 2-3 sentences, in the same language as the conversation:\n{text}")
         try:
             resp = await self._client.messages.create(
                 model=self._model, max_tokens=256, temperature=0.0,
@@ -263,7 +263,7 @@ class MemoryManager:
             )
             summary = self._safe_text(extract_text_content(resp.content)).strip()
         except Exception:
-            summary = f"对话包含 {len(to_compress)} 条消息（摘要生成失败）"
+            summary = f"Conversation contains {len(to_compress)} messages (summary generation failed)"
 
         # 存摘要到 Redis
         skey = self._summary_key(user_id, conv_id)

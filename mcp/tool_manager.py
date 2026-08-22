@@ -290,10 +290,10 @@ class MCPToolManager:
           原始: "ETF费率"
           改写: ["ETF管理费是多少", "ETF跟踪误差怎么算", "ETF申赎有什么费用"]
         """
-        prompt = f"""将以下用户查询改写为 {n} 个不同角度的搜索子查询，用于检索知识库。
-要求：每个子查询角度不同，覆盖原始问题的不同方面。
-原始查询: "{query}"
-返回 JSON 数组，例如: ["子查询1", "子查询2", "子查询3"]"""
+        prompt = f"""Rewrite the following user query into {n} search sub-queries from different angles, for knowledge-base retrieval.
+Requirement: each sub-query takes a different angle and covers a different aspect of the original question. Keep them in the same language as the original query.
+Original query: "{query}"
+Return a JSON array, e.g.: ["sub-query 1", "sub-query 2", "sub-query 3"]"""
         prompt = self._clean_text(prompt)
         try:
             resp = await self._client.messages.create(
@@ -365,13 +365,13 @@ class MCPToolManager:
         # 将结果序列化为文本供 LLM 评分
         items_text = "\n".join(f"{i}. {json.dumps(item, ensure_ascii=False)[:200]}"
                                for i, item in enumerate(items))
-        prompt = f"""根据用户查询，对以下检索结果按相关性打分（0-10），返回 JSON 数组。
-用户查询: "{query}"
-检索结果:
+        prompt = f"""Given the user query, rank the following retrieval results by relevance and return a JSON array.
+User query: "{query}"
+Results:
 {items_text}
 
-返回格式（按相关性降序排列的索引列表）: [最相关的索引, ..., 最不相关的索引]
-只返回 JSON 数组，不要其他文字。"""
+Return format (a list of indices sorted by relevance, most relevant first): [most_relevant_index, ..., least_relevant_index]
+Return the JSON array only, no other text."""
         prompt = self._clean_text(prompt)
 
         try:
