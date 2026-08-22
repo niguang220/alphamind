@@ -330,7 +330,7 @@ class AgentOrchestrator:
                 routing_confidence=req.intent_confidence,
             )
 
-        # 复杂问题自动并行协作，例如同一句同时涉及登录故障和扣款/退款。
+        # 复杂问题自动并行协作，例如同一句同时涉及研报/估值分析和适当性/风险等级。
         decision = self._route_decision(req)
         if decision.multi_agent:
             return await self.run_parallel(req, decision)
@@ -346,7 +346,7 @@ class AgentOrchestrator:
         ):
             escalated = True
             logger.warning(f"请求 {req.request_id} 触发升级: urgency={req.urgency}")
-            # 生产环境：此处创建工单、通知人工客服
+            # 生产环境：此处创建工单、转接人工投顾/合规
 
         return OrchestratorResult(
             request_id=req.request_id,
