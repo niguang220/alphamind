@@ -27,25 +27,31 @@ logger = logging.getLogger(__name__)
 
 
 class IntentCategory(Enum):
-    QUERY      = "query"       # 查询信息
-    COMPLAINT  = "complaint"   # 投诉不满
-    REQUEST    = "request"     # 请求操作
-    GREETING   = "greeting"    # 问候
-    ESCALATION = "escalation"  # 要求升级/转人工
-    TECHNICAL  = "technical"   # 技术问题
-    BILLING    = "billing"     # 账单/退款
-    ACCOUNT    = "account"     # 账户管理
-    FEEDBACK   = "feedback"    # 正面反馈
-    ORDER_STATUS = "order_status"        # 订单状态
-    LOGISTICS = "logistics"              # 物流配送
-    REFUND = "refund"                    # 退款/退货
-    INVOICE = "invoice"                  # 发票
-    PAYMENT_ISSUE = "payment_issue"      # 支付/扣款异常
-    ACCOUNT_SECURITY = "account_security" # 账户安全
-    TECHNICAL_LOGIN = "technical_login"  # 登录认证故障
-    TECHNICAL_CRASH = "technical_crash"  # 崩溃/错误码
-    HUMAN_HANDOFF = "human_handoff"      # 转人工
-    OTHER      = "other"
+    # 行情信息组 → MARKET
+    MARKET_QUOTE    = "market_quote"      # 行情/指数/涨跌查询
+    PRODUCT_INFO    = "product_info"      # 个股/ETF/基金产品信息
+    TERM_EXPLAIN    = "term_explain"      # 术语/概念解释
+    TRADING_RULE    = "trading_rule"      # 交易规则
+    # 投研分析组 → RESEARCH
+    RESEARCH_REPORT = "research_report"   # 研报检索/摘要
+    FUNDAMENTAL     = "fundamental"       # 基本面/财报解读
+    VALUATION       = "valuation"         # 估值/财务指标
+    COMPARISON      = "comparison"        # 个股/ETF 对比
+    QUANT_CONCEPT   = "quant_concept"     # 量化/因子/回测/夏普/回撤
+    # 合规适当性组 → COMPLIANCE
+    ACCOUNT         = "account"           # 开户/账户管理
+    FUNDING         = "funding"           # 出入金/银证转账/资金流水
+    SUITABILITY     = "suitability"       # 风险测评/适当性/风险等级
+    RISK_DISCLOSURE = "risk_disclosure"   # 风险揭示
+    STATEMENT       = "statement"         # 对账单/交割单/税务
+    # 流程 / 护栏
+    ADVICE_REQUEST  = "advice_request"    # ⚠️护栏:荐股/择时/保收益/代客
+    COMPLAINT       = "complaint"         # 投诉
+    HUMAN_HANDOFF   = "human_handoff"     # 转人工投顾
+    ESCALATION      = "escalation"        # 升级
+    GREETING        = "greeting"          # 问候
+    FEEDBACK        = "feedback"          # 正面反馈
+    OTHER           = "other"
 
 
 class UrgencyLevel(Enum):
@@ -69,61 +75,69 @@ class IntentResult:
 
 # ── Few-shot 模板（同时用于 LLM 示例和 Embedding 匹配）────────────────────────
 _TEMPLATES: Dict[IntentCategory, List[str]] = {
-    IntentCategory.QUERY:      ["我的订单状态是什么？", "如何重置密码？", "快递什么时候到？"],
-    IntentCategory.COMPLAINT:  ["等了好几个小时！", "服务太差了！", "一直没人处理！"],
-    IntentCategory.REQUEST:    ["帮我取消订单", "我需要修改地址", "请协助退款"],
-    IntentCategory.GREETING:   ["你好", "嗨，有人吗", "早上好"],
-    IntentCategory.ESCALATION: ["我要投诉！", "转人工客服", "找你们经理"],
-    IntentCategory.TECHNICAL:  ["应用一直崩溃", "无法登录", "出现500错误"],
-    IntentCategory.BILLING:    ["为什么扣了两次款？", "申请退款", "发票问题"],
-    IntentCategory.ACCOUNT:    ["修改邮箱", "注销账户", "更新个人信息"],
-    IntentCategory.FEEDBACK:   ["服务很棒！", "非常满意", "给个好评"],
-    IntentCategory.ORDER_STATUS: ["我的订单现在是什么状态？", "订单有没有发货？", "订单处理到哪一步了？"],
-    IntentCategory.LOGISTICS: ["快递什么时候到？", "物流一直不更新", "配送要多久？"],
-    IntentCategory.REFUND: ["我要申请退款", "退货退款怎么处理？", "退款多久到账？"],
-    IntentCategory.INVOICE: ["帮我开发票", "发票抬头怎么改？", "电子发票在哪里？"],
-    IntentCategory.PAYMENT_ISSUE: ["为什么重复扣款？", "支付失败怎么办？", "这个月多扣了钱"],
-    IntentCategory.ACCOUNT_SECURITY: ["账户被盗了", "发现异常登录", "我要重置密码"],
-    IntentCategory.TECHNICAL_LOGIN: ["登录一直报401", "验证码收不到", "无法登录账号"],
-    IntentCategory.TECHNICAL_CRASH: ["应用一直崩溃", "页面报500错误", "系统闪退"],
-    IntentCategory.HUMAN_HANDOFF: ["转人工客服", "我要找人工", "请升级处理"],
+    IntentCategory.MARKET_QUOTE:    ["上证指数今天多少点", "贵州茅台现在什么价", "创业板涨了吗"],
+    IntentCategory.PRODUCT_INFO:    ["沪深300ETF的费率是多少", "这只ETF跟踪什么指数", "该基金前十大重仓股"],
+    IntentCategory.TERM_EXPLAIN:    ["市盈率是什么意思", "夏普比率怎么理解", "什么叫最大回撤"],
+    IntentCategory.TRADING_RULE:    ["A股是不是T+1", "涨跌停是多少", "交易时间几点到几点"],
+    IntentCategory.RESEARCH_REPORT: ["有没有这家公司的研报", "帮我找券商研报摘要", "最新的行业研报"],
+    IntentCategory.FUNDAMENTAL:     ["帮我看下这家公司财报", "它的营收和净利润", "毛利率怎么样"],
+    IntentCategory.VALUATION:       ["现在估值贵不贵", "PE分位数是多少", "PB和ROE怎么算"],
+    IntentCategory.COMPARISON:      ["这两只ETF哪个更好", "对比一下这两家公司", "宽基和行业ETF区别"],
+    IntentCategory.QUANT_CONCEPT:   ["动量因子是什么", "回测年化收益怎么算", "什么是最大回撤和夏普"],
+    IntentCategory.ACCOUNT:         ["怎么开户", "如何修改绑定银行卡", "怎么销户"],
+    IntentCategory.FUNDING:         ["怎么银证转账", "出金多久到账", "入金没到怎么办"],
+    IntentCategory.SUITABILITY:     ["我的风险测评是R2", "适当性怎么评估", "R3能买什么产品"],
+    IntentCategory.RISK_DISCLOSURE: ["这个产品有什么风险", "风险揭示书在哪", "杠杆有什么风险"],
+    IntentCategory.STATEMENT:       ["我的对账单在哪看", "交割单怎么下载", "交易流水导出"],
+    IntentCategory.ADVICE_REQUEST:  ["帮我推荐一只能翻倍的股票", "现在该买哪只", "明天会涨吗", "帮我下单买入", "保本吗稳赚吗"],
+    IntentCategory.COMPLAINT:       ["你们这服务太差了", "等了很久没人管", "太糟糕了"],
+    IntentCategory.HUMAN_HANDOFF:   ["转人工投顾", "我要找人工", "接投资顾问"],
+    IntentCategory.ESCALATION:      ["我要投诉", "找你们主管", "升级处理"],
+    IntentCategory.GREETING:        ["你好", "在吗", "早上好"],
+    IntentCategory.FEEDBACK:        ["讲得很清楚", "非常感谢", "点赞"],
 }
 
 _SPECIFIC_INTENTS = {
-    IntentCategory.ORDER_STATUS,
-    IntentCategory.LOGISTICS,
-    IntentCategory.REFUND,
-    IntentCategory.INVOICE,
-    IntentCategory.PAYMENT_ISSUE,
-    IntentCategory.ACCOUNT_SECURITY,
-    IntentCategory.TECHNICAL_LOGIN,
-    IntentCategory.TECHNICAL_CRASH,
+    IntentCategory.MARKET_QUOTE, IntentCategory.PRODUCT_INFO, IntentCategory.TERM_EXPLAIN,
+    IntentCategory.TRADING_RULE, IntentCategory.RESEARCH_REPORT, IntentCategory.FUNDAMENTAL,
+    IntentCategory.VALUATION, IntentCategory.COMPARISON, IntentCategory.QUANT_CONCEPT,
+    IntentCategory.ACCOUNT, IntentCategory.FUNDING, IntentCategory.SUITABILITY,
+    IntentCategory.RISK_DISCLOSURE, IntentCategory.STATEMENT, IntentCategory.ADVICE_REQUEST,
     IntentCategory.HUMAN_HANDOFF,
 }
 
 _GENERIC_INTENTS = {
-    IntentCategory.QUERY,
-    IntentCategory.BILLING,
-    IntentCategory.TECHNICAL,
-    IntentCategory.ACCOUNT,
+    IntentCategory.COMPLAINT,
     IntentCategory.ESCALATION,
+    IntentCategory.GREETING,
+    IntentCategory.FEEDBACK,
 }
 
-_INTENT_GROUPS: Dict[IntentCategory, IntentCategory] = {
-    IntentCategory.ORDER_STATUS: IntentCategory.QUERY,
-    IntentCategory.LOGISTICS: IntentCategory.QUERY,
-    IntentCategory.REFUND: IntentCategory.BILLING,
-    IntentCategory.INVOICE: IntentCategory.BILLING,
-    IntentCategory.PAYMENT_ISSUE: IntentCategory.BILLING,
-    IntentCategory.ACCOUNT_SECURITY: IntentCategory.ACCOUNT,
-    IntentCategory.TECHNICAL_LOGIN: IntentCategory.TECHNICAL,
-    IntentCategory.TECHNICAL_CRASH: IntentCategory.TECHNICAL,
-    IntentCategory.HUMAN_HANDOFF: IntentCategory.ESCALATION,
+# 意图 → 分组字符串(market / research / compliance / escalation)
+_INTENT_GROUPS: Dict[IntentCategory, str] = {
+    IntentCategory.MARKET_QUOTE: "market",
+    IntentCategory.PRODUCT_INFO: "market",
+    IntentCategory.TERM_EXPLAIN: "market",
+    IntentCategory.TRADING_RULE: "market",
+    IntentCategory.RESEARCH_REPORT: "research",
+    IntentCategory.FUNDAMENTAL: "research",
+    IntentCategory.VALUATION: "research",
+    IntentCategory.COMPARISON: "research",
+    IntentCategory.QUANT_CONCEPT: "research",
+    IntentCategory.ACCOUNT: "compliance",
+    IntentCategory.FUNDING: "compliance",
+    IntentCategory.SUITABILITY: "compliance",
+    IntentCategory.RISK_DISCLOSURE: "compliance",
+    IntentCategory.STATEMENT: "compliance",
+    IntentCategory.COMPLAINT: "compliance",
+    IntentCategory.ADVICE_REQUEST: "escalation",
+    IntentCategory.HUMAN_HANDOFF: "escalation",
+    IntentCategory.ESCALATION: "escalation",
 }
 
 # 紧急关键词
 _URGENCY_KEYWORDS = {
-    UrgencyLevel.CRITICAL: ["紧急", "emergency", "urgent", "asap", "立刻"],
+    UrgencyLevel.CRITICAL: ["紧急", "emergency", "urgent", "asap", "立刻", "爆仓", "强平", "被盗", "资金异常"],
     UrgencyLevel.HIGH:     ["今天", "马上", "尽快", "hurry", "now"],
     UrgencyLevel.MEDIUM:   ["这周", "soon", "快点"],
 }
@@ -252,9 +266,10 @@ class IntentRecognizer:
                 for m in history[-3:]
             )
 
-        prompt = f"""你是客服意图分析专家。根据示例判断用户意图，返回 JSON。
+        prompt = f"""你是证券投研咨询的意图分析专家。根据示例判断用户意图，返回 JSON。
 如果用户问题能匹配细粒度业务意图，请优先返回细粒度意图，而不是宽泛大类。
-例如退款优先返回 refund，发票优先返回 invoice，登录故障优先返回 technical_login。
+例如研报检索优先返回 research_report，估值分析优先返回 valuation，风险测评/适当性优先返回 suitability；
+若用户在索要买卖建议、荐股、择时、保证收益或代客操作，请返回 advice_request。
 
 示例:
 {examples}
@@ -308,25 +323,29 @@ class IntentRecognizer:
         """策略 3：关键词模式匹配（同步，零延迟兜底）。"""
         msg = message.lower()
         specific_patterns = {
-            IntentCategory.HUMAN_HANDOFF: ["转人工", "人工客服", "找人工"],
-            IntentCategory.ORDER_STATUS: ["订单状态", "发货了吗", "处理到哪", "order status"],
-            IntentCategory.LOGISTICS: ["物流", "快递", "配送", "运单", "delivery", "shipping"],
-            IntentCategory.REFUND: ["退款", "退货", "refund", "return"],
-            IntentCategory.INVOICE: ["发票", "抬头", "税号", "invoice"],
-            IntentCategory.PAYMENT_ISSUE: ["重复扣款", "多扣", "支付失败", "扣费", "payment failed"],
-            IntentCategory.ACCOUNT_SECURITY: ["被盗", "异常登录", "重置密码", "两步验证", "安全"],
-            IntentCategory.TECHNICAL_LOGIN: ["无法登录", "登录失败", "401", "验证码"],
-            IntentCategory.TECHNICAL_CRASH: ["崩溃", "闪退", "500", "报错", "crash"],
+            IntentCategory.ADVICE_REQUEST: ["推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨",
+                "能涨到", "涨不涨", "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "代客", "全仓", "梭哈", "抄底"],
+            IntentCategory.RESEARCH_REPORT: ["研报", "研究报告", "券商报告", "评级报告"],
+            IntentCategory.FUNDAMENTAL: ["财报", "年报", "季报", "营收", "净利润", "毛利率", "基本面"],
+            IntentCategory.VALUATION: ["估值", "市盈率", "pe", "pb", "市净率", "roe", "分位"],
+            IntentCategory.QUANT_CONCEPT: ["因子", "回测", "夏普", "最大回撤", "波动率", "beta", "阿尔法", "alpha"],
+            IntentCategory.COMPARISON: ["对比", "比较", "哪个更好", "区别", "vs"],
+            IntentCategory.PRODUCT_INFO: ["etf", "基金", "跟踪误差", "成分股", "重仓", "费率", "申赎"],
+            IntentCategory.TRADING_RULE: ["t+1", "涨跌停", "交易时间", "交易时段", "集合竞价", "佣金", "印花税", "过户费"],
+            IntentCategory.TERM_EXPLAIN: ["什么意思", "怎么理解", "是什么", "什么叫", "概念"],
+            IntentCategory.MARKET_QUOTE: ["行情", "指数", "点位", "股价", "涨了", "跌了", "多少点"],
+            IntentCategory.SUITABILITY: ["风险测评", "适当性", "风险等级", "r1", "r2", "r3", "r4", "r5", "能买"],
+            IntentCategory.RISK_DISCLOSURE: ["风险揭示", "有什么风险", "风险提示", "杠杆风险"],
+            IntentCategory.ACCOUNT: ["开户", "销户", "账户", "绑定银行卡", "三方存管"],
+            IntentCategory.FUNDING: ["银证转账", "出金", "入金", "转账", "资金流水", "到账"],
+            IntentCategory.STATEMENT: ["对账单", "交割单", "交易流水", "税务凭证"],
+            IntentCategory.HUMAN_HANDOFF: ["转人工", "人工投顾", "找人工", "投资顾问"],
         }
         generic_patterns = {
-            IntentCategory.ESCALATION: ["投诉", "经理", "supervisor"],
-            IntentCategory.COMPLAINT:  ["太差", "糟糕", "horrible", "等了很久"],
-            IntentCategory.QUERY:      ["?", "？", "怎么", "什么", "status"],
-            IntentCategory.REQUEST:    ["帮我", "需要", "please", "help"],
-            IntentCategory.GREETING:   ["你好", "嗨", "hello", "hi"],
-            IntentCategory.BILLING:    ["退款", "扣款", "发票", "refund"],
-            IntentCategory.TECHNICAL:  ["崩溃", "报错", "error", "crash"],
-            IntentCategory.ACCOUNT:    ["密码", "邮箱", "账户", "password"],
+            IntentCategory.ESCALATION: ["投诉", "主管", "经理", "supervisor"],
+            IntentCategory.COMPLAINT:  ["太差", "糟糕", "垃圾", "等了很久"],
+            IntentCategory.GREETING:   ["你好", "在吗", "hello", "hi", "早上好"],
+            IntentCategory.FEEDBACK:   ["谢谢", "感谢", "很清楚", "点赞", "满意"],
         }
 
         best_cat, best_score = self._best_pattern_match(msg, specific_patterns)
@@ -378,12 +397,18 @@ class IntentRecognizer:
     def _extract_entities(self, message: str) -> Dict[str, List[str]]:
         """用规则提取高价值实体，避免每次识别都额外调用 LLM。"""
         message = self._clean_text(message)
+        # 说明:中文字符在 Python re 中属于 \w,因此不能依赖 \b 做左边界
+        # (如 "级R3" 中 级 与 R 之间无 \b)。这里改用 lookaround 保证在中文旁也能命中。
         return {
-            "order_id": self._unique(re.findall(r"(?:订单号?|order(?:_id)?|#)\s*[:：#]?\s*([A-Za-z0-9_-]{4,32})", message, re.I)),
-            "product": [],
-            "date": self._unique(re.findall(r"(今天|明天|昨天|本周|这周|下周|\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", message)),
-            "amount": self._unique(re.findall(r"((?:¥|￥)\s*\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s*(?:元|块|rmb|cny|usd|美元))", message, re.I)),
-            "error_code": self._unique(re.findall(r"\b([45]\d{2}|[A-Z][A-Z0-9_-]{2,16})\b", message)),
+            "ticker": self._unique(re.findall(r"(?<![A-Za-z0-9])(\d{6}|[A-Z]{2,5})(?![A-Za-z0-9])", message)),
+            "metric": self._unique(re.findall(
+                r"(市盈率|市净率|夏普比率|最大回撤|波动率|市盈|夏普|PE|PB|ROE|ROA|EPS|Beta|Alpha|阿尔法|贝塔)",
+                message, re.I)),
+            "risk_level": [v.upper() for v in self._unique(
+                re.findall(r"(?<![A-Za-z])([RrCc][1-5])(?![0-9])", message))],
+            "percentage": self._unique(re.findall(r"(\d+(?:\.\d+)?\s*%|百分之\d+(?:\.\d+)?)", message)),
+            "amount": self._unique(re.findall(r"((?:¥|￥)\s*\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s*(?:元|万元|万|块|rmb|cny|usd|美元))", message, re.I)),
+            "date": self._unique(re.findall(r"(今天|明天|昨天|本周|这周|下周|今年|去年|\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", message)),
         }
 
     # ── 辅助 ──────────────────────────────────────────────────────────────────
@@ -485,7 +510,7 @@ class IntentRecognizer:
 
     @staticmethod
     def _intent_group(intent: IntentCategory) -> str:
-        return _INTENT_GROUPS.get(intent, intent).value
+        return _INTENT_GROUPS.get(intent, "other")
 
     @staticmethod
     def _clean_text(value: Any) -> str:
