@@ -10,8 +10,9 @@ venv/
 # 环境变量（含敏感信息）
 .env
 
-# 数据目录
-data/
+# 数据目录(仅忽略可重建的向量库与评测产物;演示文档 data/demo_docs 保留跟踪)
+data/chroma/
+data/eval/
 logs/
 
 # IDE
