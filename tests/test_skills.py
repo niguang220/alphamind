@@ -26,3 +26,10 @@ def test_agents_isolation():
     msg = "适当性和风险等级怎么评估"
     assert sm.prompt_for(msg, "compliance")        # 合规 Skill 注入 compliance agent
     assert not sm.prompt_for(msg, "research")       # research agent 拿不到 compliance Skill(隔离)
+
+
+def test_skills_english_input():
+    sm = _sm()
+    assert sm.prompt_for("find me the research report and valuation", "research")
+    assert sm.prompt_for("suitability and risk level assessment", "compliance")
+    assert not sm.prompt_for("suitability and risk level assessment", "research")
