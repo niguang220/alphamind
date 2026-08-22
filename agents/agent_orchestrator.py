@@ -311,6 +311,11 @@ class AgentOrchestrator:
             req.urgency = intent_result.urgency
             req.intent_confidence = intent_result.confidence
 
+        # 2. 投资建议护栏:命中荐股/择时/保收益/代客请求 → 拦截并升级,不进入正常回答
+        if self._needs_guardrail(req):
+            logger.info(f"请求 {req.request_id} 命中投资建议护栏")
+            return self._guardrail_response(req, (time.monotonic() - t0) * 1000)
+
         if self._needs_clarification(req):
             return OrchestratorResult(
                 request_id=req.request_id,
@@ -586,6 +591,44 @@ class AgentOrchestrator:
         if len(text) <= 2:
             return False
         return req.intent_confidence < 0.5
+
+    # ── 投资建议护栏 ──────────────────────────────────────────────────────────
+    # 命中即拦截:不给出个股买卖建议、择时判断或收益承诺,改为风险揭示 + 转人工投顾。
+    _GUARDRAIL_KEYWORDS = [
+        "推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨", "能涨到", "涨不涨",
+        "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "帮我卖", "代客",
+        "全仓", "梭哈", "抄底", "能不能买", "值不值得买", "要不要买",
+    ]
+
+    def _needs_guardrail(self, req: Request) -> bool:
+        """是否命中投资建议护栏:意图为 advice_request,或消息含荐股/择时/保收益/代客等关键词。"""
+        if req.intent == IntentCategory.ADVICE_REQUEST:
+            return True
+        msg = (req.message or "").lower()
+        return any(kw in msg for kw in self._GUARDRAIL_KEYWORDS)
+
+    def _guardrail_response(self, req: Request, elapsed_ms: float) -> OrchestratorResult:
+        """护栏安全响应:合规拒答 + 风险揭示 + 升级,不进入领域 Agent 生成。"""
+        text = (
+            "AlphaMind 提供证券投研信息与投资者教育，不构成投资建议，也不能代您做出买卖决策或下单。\n"
+            "关于个股/产品的买卖判断，请注意以下风险提示：\n"
+            "1. 证券投资有风险，历史表现不代表未来收益，任何人都无法保证收益或保本；\n"
+            "2. 是否适合某产品，取决于您的风险承受能力（适当性/风险等级 R1-R5）与投资目标；\n"
+            "3. 具体买卖决策建议咨询持牌投资顾问。\n"
+            "我可以帮您：解读该标的的基本面/估值/研报要点、说明产品风险与交易规则，或为您转接人工投顾。"
+        )
+        return OrchestratorResult(
+            request_id=req.request_id,
+            response=text,
+            agent_type=AgentType.ESCALATION,
+            intent=req.intent,
+            escalated=True,
+            latency_ms=elapsed_ms,
+            agent_types=[AgentType.ESCALATION],
+            primary_agent=AgentType.ESCALATION,
+            routing_reason=f"guardrail=advice_request,intent={req.intent.value if req.intent else 'unknown'}",
+            routing_confidence=1.0,
+        )
 
     def _best_agent(self, agent_type: AgentType) -> Optional[BaseAgent]:
         """

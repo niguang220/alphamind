@@ -34,3 +34,37 @@ def test_intent_routing_map():
     assert AgentOrchestrator._INTENT_ROUTING[IntentCategory.VALUATION] == AgentType.RESEARCH
     assert AgentOrchestrator._INTENT_ROUTING[IntentCategory.SUITABILITY] == AgentType.COMPLIANCE
     assert AgentOrchestrator._INTENT_ROUTING[IntentCategory.HUMAN_HANDOFF] == AgentType.ESCALATION
+
+
+# ── 投资建议护栏(T3)────────────────────────────────────────────────────────
+
+def test_guardrail_detects_advice():
+    o = _orch()
+    for msg in ["帮我推荐一只能翻倍的股票", "现在该不该买茅台", "明天会涨吗", "帮我下单"]:
+        req = Request(message=msg, user_id="u", conv_id="c", intent=IntentCategory.ADVICE_REQUEST)
+        assert o._needs_guardrail(req) is True, msg
+
+
+def test_guardrail_keyword_without_intent():
+    # 即便调用方给的意图不是 advice_request,关键词命中也应触发护栏
+    o = _orch()
+    req = Request(message="你觉得现在该买哪只白酒股", user_id="u", conv_id="c",
+                  intent=IntentCategory.COMPARISON)
+    assert o._needs_guardrail(req) is True
+
+
+def test_guardrail_not_triggered_for_info():
+    o = _orch()
+    req = Request(message="沪深300ETF的费率是多少", user_id="u", conv_id="c",
+                  intent=IntentCategory.PRODUCT_INFO)
+    assert o._needs_guardrail(req) is False
+
+
+def test_guardrail_response_shape():
+    o = _orch()
+    req = Request(message="推荐一只翻倍股", user_id="u", conv_id="c", intent=IntentCategory.ADVICE_REQUEST)
+    res = o._guardrail_response(req, 0.0)
+    assert res.escalated is True
+    assert res.agent_type == AgentType.ESCALATION
+    assert "不构成投资建议" in res.response
+    assert "guardrail" in res.routing_reason
