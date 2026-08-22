@@ -68,3 +68,20 @@ def test_guardrail_response_shape():
     assert res.agent_type == AgentType.ESCALATION
     assert "不构成投资建议" in res.response
     assert "guardrail" in res.routing_reason
+
+
+def test_guardrail_detects_advice_english():
+    o = _orch()
+    for msg in ["recommend me a stock that will double", "should I buy this now",
+                "will it go up tomorrow", "place a buy order for me"]:
+        req = Request(message=msg, user_id="u", conv_id="c", intent=IntentCategory.ADVICE_REQUEST)
+        assert o._needs_guardrail(req) is True, msg
+
+
+def test_guardrail_response_english():
+    o = _orch()
+    req = Request(message="recommend a stock that will double", user_id="u", conv_id="c",
+                  intent=IntentCategory.ADVICE_REQUEST)
+    res = o._guardrail_response(req, 0.0)
+    assert res.escalated is True
+    assert "does not constitute investment advice" in res.response

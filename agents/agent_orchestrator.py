@@ -32,6 +32,15 @@ from core.llm_utils import extract_text_content
 logger = logging.getLogger(__name__)
 
 
+def _is_english(text: str) -> bool:
+    """简单判定输入主要是英文还是中文,用于固定文案(护栏/澄清/错误)的语言自适应。"""
+    if not text:
+        return True
+    letters = sum(1 for c in text if c.isascii() and c.isalpha())
+    cjk = sum(1 for c in text if "一" <= c <= "鿿")
+    return letters >= cjk
+
+
 # ── 数据结构 ──────────────────────────────────────────────────────────────────
 
 class AgentType(Enum):
@@ -155,9 +164,11 @@ class BaseAgent:
             ms = (time.monotonic() - t0) * 1000
             self.stats.total_ms += ms
             logger.error(f"{self.agent_type.value} 处理失败: {ex}")
+            fallback = ("Sorry, something went wrong while handling your request. Please try again later."
+                        if _is_english(req.message) else "抱歉，处理您的请求时出现问题，请稍后重试。")
             return AgentResponse(
                 agent_type=self.agent_type,
-                content="抱歉，处理您的请求时出现问题，请稍后重试。",
+                content=fallback,
                 success=False,
                 latency_ms=ms,
             )
@@ -168,12 +179,12 @@ class BaseAgent:
 
         messages = []
         if req.context:
-            messages.append({"role": "user", "content": f"[背景信息]\n{_clean(req.context)}"})
-            messages.append({"role": "assistant", "content": "好的，我已了解背景信息。"})
+            messages.append({"role": "user", "content": f"[Context]\n{_clean(req.context)}"})
+            messages.append({"role": "assistant", "content": "Understood, I have reviewed the context."})
         if req.entities:
             entities_text = json.dumps(req.entities, ensure_ascii=False)
-            messages.append({"role": "user", "content": f"[结构化实体]\n{_clean(entities_text)}"})
-            messages.append({"role": "assistant", "content": "好的，我会结合这些结构化实体处理。"})
+            messages.append({"role": "user", "content": f"[Structured entities]\n{_clean(entities_text)}"})
+            messages.append({"role": "assistant", "content": "Understood, I will use these entities."})
         messages.append({"role": "user", "content": _clean(req.message)})
 
         resp = await self._client.messages.create(
@@ -184,47 +195,58 @@ class BaseAgent:
         )
         return extract_text_content(resp.content)
 
+    # 让回复语言跟随用户提问语言,同时保持内容(prompt/知识库)为英文。
+    _LANG_DIRECTIVE = "\n\nAlways respond in the same language as the user's latest message (Chinese or English)."
+
     def _build_system_prompt(self, req: Request) -> str:
         """把动态加载的 Skills 拼入 system prompt，让业务规则随请求生效。"""
+        base = self.system_prompt + self._LANG_DIRECTIVE
         if self._skill_manager is None:
-            return self.system_prompt
+            return base
         skill_prompt = self._skill_manager.prompt_for(req.message, self.agent_type.value)
         if not skill_prompt:
-            return self.system_prompt
-        return f"{self.system_prompt}\n\n[动态 Skills]\n{skill_prompt}"
+            return base
+        return f"{base}\n\n[Dynamic Skills]\n{skill_prompt}"
 
     def _needs_escalation(self, content: str) -> bool:
         """检测 Agent 是否建议升级（简单关键词检测）。"""
-        keywords = ["转人工", "人工投顾", "投资顾问", "无法处理", "escalate"]
+        keywords = ["转人工", "人工投顾", "投资顾问", "无法处理",
+                    "escalate", "human advisor", "investment advisor", "cannot handle"]
         return any(kw in content for kw in keywords)
 
 
 class MarketAgent(BaseAgent):
     agent_type    = AgentType.MARKET
     system_prompt = (
-        "你是 AlphaMind 的行情与信息助手。客观、中立地提供行情、指数、个股/ETF 产品信息和术语解释。"
-        "只做信息陈述，不预测涨跌、不给买卖建议。涉及具体买卖决策时，提示这属于投资决策并建议咨询持牌投顾。"
-        "如信息可能有时效性，提醒用户以实时行情为准。"
+        "You are AlphaMind's Market & Information assistant. Provide market quotes, indices, "
+        "stock/ETF product information and term explanations objectively and neutrally. "
+        "State facts only; do NOT predict price movements or give buy/sell advice. "
+        "When a question involves an actual buy/sell decision, note that this is an investment decision "
+        "and suggest consulting a licensed advisor. Remind users that quotes are time-sensitive and to rely on real-time data."
     )
 
 
 class ResearchAgent(BaseAgent):
     agent_type    = AgentType.RESEARCH
     system_prompt = (
-        "你是 AlphaMind 的投研与分析助手。专注：研报检索与摘要、财报/基本面解读、估值与财务指标、"
-        "量化概念（因子/回测/夏普/最大回撤）。"
-        "只做客观分析，同时呈现多空两面与风险，不下买卖结论、不荐股、不预测点位。"
-        "引用数据时说明口径与时效，并提醒历史数据不代表未来表现。"
+        "You are AlphaMind's Research & Analysis assistant. Focus on: research report retrieval and summaries, "
+        "financial statement / fundamentals interpretation, valuation and financial metrics, and quantitative concepts "
+        "(factors, backtesting, Sharpe ratio, maximum drawdown). "
+        "Give objective analysis presenting both bullish and bearish sides and the key risks; "
+        "do NOT draw buy/sell conclusions, recommend stocks, or predict price targets. "
+        "State the basis and timeliness of any data, and remind users that past performance does not indicate future results."
     )
 
 
 class ComplianceAgent(BaseAgent):
     agent_type    = AgentType.COMPLIANCE
     system_prompt = (
-        "你是 AlphaMind 的合规与适当性助手。专注：投资者适当性与风险等级（R1-R5）、风险揭示、开户/账户、"
-        "出入金与银证转账、交易规则与费率、对账单。"
-        "严格遵守合规底线：不荐股、不承诺收益、不代客操作、不索要账户密码。"
-        "当用户风险等级与产品风险不匹配，或涉及高风险产品时，明确提示并建议转人工投顾核验。"
+        "You are AlphaMind's Compliance & Suitability assistant. Focus on: investor suitability and risk ratings (R1-R5), "
+        "risk disclosure, account opening/management, deposits/withdrawals and bank-securities transfers, "
+        "trading rules and fees, and statements. "
+        "Strictly follow compliance limits: do NOT recommend stocks, promise returns, trade on the client's behalf, or ask for account passwords. "
+        "When the user's risk rating does not match a product's risk, or a high-risk product is involved, "
+        "clearly flag it and suggest transferring to a human advisor for verification."
     )
 
 
@@ -317,16 +339,20 @@ class AgentOrchestrator:
             return self._guardrail_response(req, (time.monotonic() - t0) * 1000)
 
         if self._needs_clarification(req):
+            clarify = ("I'm not sure which category your question falls into. Is it about market / product information, "
+                       "research analysis (reports / valuation / financials), or account / suitability / trading rules?"
+                       if _is_english(req.message) else
+                       "我还不能确定您的问题类别。请问是行情/产品信息、投研分析（研报/估值/财报），还是账户/适当性/交易规则？")
             return OrchestratorResult(
                 request_id=req.request_id,
-                response="我还不能确定您的问题类别。请问是行情/产品信息、投研分析（研报/估值/财报），还是账户/适当性/交易规则？",
+                response=clarify,
                 agent_type=AgentType.MARKET,
                 intent=req.intent,
                 escalated=False,
                 latency_ms=(time.monotonic() - t0) * 1000,
                 agent_types=[AgentType.MARKET],
                 primary_agent=AgentType.MARKET,
-                routing_reason="低置信度 OTHER 意图，先澄清用户需求",
+                routing_reason="low-confidence OTHER intent, ask user to clarify",
                 routing_confidence=req.intent_confidence,
             )
 
@@ -376,10 +402,14 @@ class AgentOrchestrator:
         parts = []
         for r in responses:
             if isinstance(r, AgentResponse) and r.success:
-                role = "主处理" if r.agent_type == decision.primary_agent else "辅助处理"
+                role = "primary" if r.agent_type == decision.primary_agent else "supporting"
                 parts.append(f"[{r.agent_type.value} - {role}]\n{r.content}")
 
-        combined = "\n\n".join(parts) if parts else "抱歉，所有 Agent 均处理失败。"
+        if parts:
+            combined = "\n\n".join(parts)
+        else:
+            combined = ("Sorry, all agents failed to process the request."
+                        if _is_english(req.message) else "抱歉，所有 Agent 均处理失败。")
         escalated = any(isinstance(r, AgentResponse) and r.escalate for r in responses)
 
         return OrchestratorResult(
@@ -429,14 +459,14 @@ class AgentOrchestrator:
         if req.urgency == UrgencyLevel.CRITICAL:
             return RoutingDecision(
                 primary_agent=AgentType.ESCALATION,
-                reason="紧急度为 CRITICAL，触发升级路由",
+                reason="urgency=CRITICAL, escalation route",
                 confidence=1.0,
             )
 
         if req.intent in (IntentCategory.ESCALATION, IntentCategory.HUMAN_HANDOFF):
             return RoutingDecision(
                 primary_agent=AgentType.ESCALATION,
-                reason=f"意图为 {req.intent.value if req.intent else 'unknown'}，触发升级路由",
+                reason=f"intent={req.intent.value if req.intent else 'unknown'}, escalation route",
                 confidence=max(req.intent_confidence, 0.8),
             )
 
@@ -449,7 +479,7 @@ class AgentOrchestrator:
         if not available_scores:
             return RoutingDecision(
                 primary_agent=AgentType.MARKET,
-                reason="无可用专属 Agent，降级到 MarketAgent",
+                reason="no specialized agent available, fallback to MarketAgent",
                 confidence=0.1,
             )
 
@@ -595,9 +625,15 @@ class AgentOrchestrator:
     # ── 投资建议护栏 ──────────────────────────────────────────────────────────
     # 命中即拦截:不给出个股买卖建议、择时判断或收益承诺,改为风险揭示 + 转人工投顾。
     _GUARDRAIL_KEYWORDS = [
+        # 中文
         "推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨", "能涨到", "涨不涨",
         "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "帮我卖", "代客",
         "全仓", "梭哈", "抄底", "能不能买", "值不值得买", "要不要买",
+        # 英文
+        "recommend", "should i buy", "should i sell", "will it go up", "will it rise",
+        "guaranteed", "buy for me", "sell for me", "place a buy order", "place an order",
+        "trade for me", "which to buy", "what to buy", "worth buying", "all in",
+        "double my money", "price target", "tell me what to buy",
     ]
 
     def _needs_guardrail(self, req: Request) -> bool:
@@ -608,15 +644,27 @@ class AgentOrchestrator:
         return any(kw in msg for kw in self._GUARDRAIL_KEYWORDS)
 
     def _guardrail_response(self, req: Request, elapsed_ms: float) -> OrchestratorResult:
-        """护栏安全响应:合规拒答 + 风险揭示 + 升级,不进入领域 Agent 生成。"""
-        text = (
-            "AlphaMind 提供证券投研信息与投资者教育，不构成投资建议，也不能代您做出买卖决策或下单。\n"
-            "关于个股/产品的买卖判断，请注意以下风险提示：\n"
-            "1. 证券投资有风险，历史表现不代表未来收益，任何人都无法保证收益或保本；\n"
-            "2. 是否适合某产品，取决于您的风险承受能力（适当性/风险等级 R1-R5）与投资目标；\n"
-            "3. 具体买卖决策建议咨询持牌投资顾问。\n"
-            "我可以帮您：解读该标的的基本面/估值/研报要点、说明产品风险与交易规则，或为您转接人工投顾。"
-        )
+        """护栏安全响应:合规拒答 + 风险揭示 + 升级,不进入领域 Agent 生成。语言跟随用户提问。"""
+        if _is_english(req.message):
+            text = (
+                "AlphaMind provides securities research information and investor education. "
+                "This does not constitute investment advice, and I cannot make buy/sell decisions or place orders for you.\n"
+                "Regarding buy/sell judgments on a specific security or product, please note:\n"
+                "1. Securities investing carries risk; past performance does not indicate future results, and no one can guarantee returns or principal;\n"
+                "2. Whether a product suits you depends on your risk tolerance (suitability / risk rating R1-R5) and objectives;\n"
+                "3. For specific buy/sell decisions, please consult a licensed investment advisor.\n"
+                "I can help you: interpret the fundamentals / valuation / research highlights of the security, "
+                "explain product risks and trading rules, or connect you to a human advisor."
+            )
+        else:
+            text = (
+                "AlphaMind 提供证券投研信息与投资者教育，不构成投资建议，也不能代您做出买卖决策或下单。\n"
+                "关于个股/产品的买卖判断，请注意以下风险提示：\n"
+                "1. 证券投资有风险，历史表现不代表未来收益，任何人都无法保证收益或保本；\n"
+                "2. 是否适合某产品，取决于您的风险承受能力（适当性/风险等级 R1-R5）与投资目标；\n"
+                "3. 具体买卖决策建议咨询持牌投资顾问。\n"
+                "我可以帮您：解读该标的的基本面/估值/研报要点、说明产品风险与交易规则，或为您转接人工投顾。"
+            )
         return OrchestratorResult(
             request_id=req.request_id,
             response=text,
