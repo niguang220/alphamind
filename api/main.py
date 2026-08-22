@@ -1,7 +1,6 @@
 """
-AlphaMind 证券投研助手 — FastAPI 入口
+AlphaMind 证券投研智能咨询助手 — FastAPI 入口
 
-启动时打印小熊饼干图案。
 所有核心组件在 lifespan 中初始化，通过环境变量配置。
 """
 import asyncio
@@ -34,12 +33,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BANNER = r"""
-    ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ
-   ╔══════════════════════╗
-   ║   AlphaMind  v2.0     ║
-   ║   智能客服 AI 系统    ║
-   ╚══════════════════════╝
-    ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ
+   ╔════════════════════════════╗
+   ║   AlphaMind  v2.0          ║
+   ║   证券投研 AI 咨询助手      ║
+   ╚════════════════════════════╝
 """
 
 # ── 全局组件（lifespan 中初始化）─────────────────────────────────────────────
@@ -133,7 +130,7 @@ async def lifespan(app: FastAPI):
         query = params.get("query", "")
         return [{
             "title": "知识库降级结果",
-            "content": f"知识库暂时不可用，未能完成对“{query}”的语义检索。请稍后重试，或转人工客服确认。",
+            "content": f"知识库暂时不可用，未能完成对“{query}”的检索。请稍后重试，或转接人工投顾确认。",
             "score": 0.0,
             "fallback": True,
             "error": error,
@@ -188,7 +185,8 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="AlphaMind 智能客服",
+    title="AlphaMind 证券投研智能咨询助手",
+    description="证券投研信息问答 + 投资者教育 + 研报/数据检索助手。不构成投资建议、不荐股、不承诺收益、不代客操作。",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -358,7 +356,7 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
 
         if not used:
             return "", False
-        parts.append("请优先依据以上知识库内容回答；如果知识库内容不足，再结合通用客服能力说明。")
+        parts.append("请优先依据以上知识库内容回答；如果知识库内容不足，再结合通用投研信息说明，并注意不得给出个股买卖建议。")
         return "\n".join(parts), True
     except Exception as ex:
         logger.warning(f"构建知识库上下文失败: {ex}")
@@ -366,26 +364,28 @@ async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) ->
 
 
 def _should_use_knowledge(message: str, intent=None) -> bool:
-    """跳过纯寒暄，业务类问题才检索知识库，避免无关 RAG 干扰回复。"""
+    """跳过纯寒暄和护栏请求，行情/投研/合规信息类问题才检索知识库，避免无关 RAG 干扰回复。"""
     msg = (message or "").strip().lower()
     if not msg:
         return False
     intent_value = getattr(intent, "value", intent)
-    if intent_value in {"greeting", "feedback", "escalation", "human_handoff", "other"}:
+    # 护栏(advice_request)会在编排层被拦截,这里也不触发检索,避免无谓成本
+    if intent_value in {"greeting", "feedback", "escalation", "human_handoff", "advice_request", "other"}:
         return False
     if intent_value in {
-        "query", "request", "technical", "billing", "account", "complaint",
-        "order_status", "logistics", "refund", "invoice", "payment_issue",
-        "account_security", "technical_login", "technical_crash",
+        "market_quote", "product_info", "term_explain", "trading_rule",
+        "research_report", "fundamental", "valuation", "comparison", "quant_concept",
+        "account", "funding", "suitability", "risk_disclosure", "statement",
     }:
         return True
     greetings = {"你好", "您好", "嗨", "hi", "hello", "hey", "早上好", "晚上好"}
     if msg in greetings:
         return False
     business_keywords = [
-        "退款", "订单", "物流", "配送", "发票", "扣款", "支付", "账单", "订阅",
-        "登录", "报错", "错误", "崩溃", "会员", "积分", "账户", "密码", "地址",
-        "refund", "order", "invoice", "payment", "error", "login",
+        "行情", "指数", "股价", "etf", "基金", "研报", "财报", "估值", "市盈率",
+        "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "适当性",
+        "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金",
+        "对账单", "交割单", "费率", "佣金", "涨跌停", "t+1", "术语",
     ]
     return len(msg) >= 4 or any(kw in msg for kw in business_keywords)
 
