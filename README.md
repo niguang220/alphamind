@@ -71,7 +71,7 @@ ANTHROPIC_API_KEY=your_api_key
 
 ```bash
 docker compose up -d --build
-docker compose logs -f alphamind      # container/network names keep the alphamind_ prefix
+docker compose logs -f alphamind
 curl http://localhost:8000/health
 # Swagger: http://localhost:8000/docs
 ```

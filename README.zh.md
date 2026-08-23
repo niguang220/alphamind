@@ -69,7 +69,7 @@ ANTHROPIC_API_KEY=your_api_key
 
 ```bash
 docker compose up -d --build
-docker compose logs -f alphamind      # 容器/网络名沿用 alphamind_ 前缀
+docker compose logs -f alphamind
 curl http://localhost:8000/health
 # Swagger: http://localhost:8000/docs
 ```
