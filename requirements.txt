@@ -1,24 +1,24 @@
-# AlphaMind 依赖清单
+# AlphaMind dependencies
 
 # ── AI / LLM ──────────────────────────────────────────────────────────────────
-anthropic==0.40.0          # LLM 调用；意图 Embedding 分支支持远端客户端，缺失时本地兜底
+anthropic==0.40.0          # LLM calls; the intent Embedding branch uses a remote client, falling back locally
 
-# ── Web 框架 ──────────────────────────────────────────────────────────────────
+# ── Web framework ─────────────────────────────────────────────────────────────
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 pydantic==2.10.3
-python-multipart==0.0.12    # FastAPI 文件上传支持
+python-multipart==0.0.12    # FastAPI file upload support
 
-# ── 数据存储 ──────────────────────────────────────────────────────────────────
+# ── Storage ───────────────────────────────────────────────────────────────────
 redis==5.2.1
-chromadb==0.5.23           # 向量数据库（长期记忆）
-posthog<3                  # 钉版本：chromadb 0.5.23 的 telemetry 调用不兼容 posthog>=3，否则日志刷 capture() 报错
+chromadb==0.5.23           # vector database (long-term memory)
+posthog<3                  # pinned: chromadb 0.5.23 calls telemetry in a way posthog>=3 rejects, spamming capture() errors
 
-# ── 监控 ──────────────────────────────────────────────────────────────────────
+# ── Monitoring ────────────────────────────────────────────────────────────────
 prometheus-client==0.21.1
 
-# ── HTTP 客户端 ───────────────────────────────────────────────────────────────
-httpx==0.28.1              # monitor/performance_monitor.py webhook 告警
+# ── HTTP client ───────────────────────────────────────────────────────────────
+httpx==0.28.1              # webhook alerts in monitor/performance_monitor.py
 
-# ── 工具 ──────────────────────────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1

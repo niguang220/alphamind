@@ -1,9 +1,9 @@
-# AlphaMind 证券投研助手 — Docker Compose 服务编排
-# 三级记忆架构：Redis（工作记忆）+ ChromaDB（情景记忆 + 用户画像）
+# AlphaMind Securities Research Assistant — Docker Compose services
+# Three-tier memory: Redis (working memory) + ChromaDB (episodic memory + user profile)
 
 services:
 
-  # ── Redis 缓存（工作记忆）────────────────────────────────────────────────────
+  # ── Redis cache (working memory) ─────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: alphamind-redis
@@ -21,7 +21,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── ChromaDB 向量数据库（情景记忆 + 用户画像）────────────────────────────────
+  # ── ChromaDB vector store (episodic memory + user profile) ───────────────────
   chromadb:
     image: chromadb/chroma:0.5.23
     container_name: alphamind-chromadb
@@ -43,7 +43,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # ── Prometheus 监控 ─────────────────────────────────────────────────────────
+  # ── Prometheus monitoring ────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: alphamind-prometheus
@@ -67,7 +67,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # ── AlphaMind 主应用 ─────────────────────────────────────────────────────────
+  # ── AlphaMind application ────────────────────────────────────────────────────
   alphamind:
     build:
       context: .
@@ -79,7 +79,7 @@ services:
     env_file:
       - .env
     environment:
-      # 容器内固定值，覆盖 .env 中的本地路径
+      # Fixed in-container values, overriding the local paths in .env
       - REDIS_URL=redis://:${REDIS_PASSWORD:-alphamind123}@redis:6379/0
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
       - EVAL_BASELINE_PATH=/app/data/eval/baseline.json
@@ -104,7 +104,7 @@ services:
       retries: 3
       start_period: 90s
 
-  # ── Nginx 反向代理 ──────────────────────────────────────────────────────────
+  # ── Nginx reverse proxy ──────────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: alphamind-nginx
@@ -126,7 +126,7 @@ services:
       retries: 3
       start_period: 10s
 
-# ── 网络 ────────────────────────────────────────────────────────────────────
+# ── Networks ─────────────────────────────────────────────────────────────────
 networks:
   alphamind-network:
     driver: bridge
@@ -134,7 +134,7 @@ networks:
       config:
         - subnet: 172.28.0.0/16
 
-# ── 数据卷 ──────────────────────────────────────────────────────────────────
+# ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   redis-data:
   chromadb-data:

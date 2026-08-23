@@ -7,10 +7,11 @@ build/
 .venv/
 venv/
 
-# 环境变量（含敏感信息）
+# Environment variables (contains secrets)
 .env
 
-# 数据目录(仅忽略可重建的向量库与评测产物;演示文档 data/demo_docs 保留跟踪)
+# Data directories: ignore only the rebuildable vector store and eval artifacts;
+# the demo documents under data/demo_docs stay tracked.
 data/chroma/
 data/eval/
 logs/
@@ -25,13 +26,13 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Docker 构建产物
+# Docker build artifacts
 build-image*.sh
 
-# ChromaDB 本地数据
+# ChromaDB local data
 *.sqlite3
 
-# 备份文件
+# Backup files
 *~
 *.bak
 docker-compose(1).yml

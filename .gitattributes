@@ -1,7 +1,7 @@
-# 统一 LF 换行,避免 Windows 编辑后迁移到 WSL/Linux 出现 CRLF 抖动
+# Force LF endings so files edited on Windows do not flip to CRLF under WSL/Linux
 * text=auto eol=lf
 
-# 二进制文件不做换行处理
+# Binary files: no line-ending conversion
 *.png binary
 *.jpg binary
 *.jpeg binary

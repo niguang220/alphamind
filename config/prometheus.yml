@@ -1,4 +1,4 @@
-# Prometheus 配置文件 — AlphaMind 证券投研助手
+# Prometheus configuration — AlphaMind Securities Research Assistant
 
 global:
   scrape_interval: 15s
@@ -11,7 +11,7 @@ rule_files:
   - "alerts/*.yml"
 
 scrape_configs:
-  # AlphaMind 主应用指标
+  # AlphaMind application metrics
   - job_name: 'alphamind-app'
     static_configs:
       - targets: ['alphamind:8000']
@@ -20,7 +20,7 @@ scrape_configs:
     scrape_interval: 10s
     metrics_path: '/metrics'
 
-  # Prometheus 自监控
+  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']

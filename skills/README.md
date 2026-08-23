@@ -24,7 +24,7 @@ Add simple front matter at the top:
 ---
 name: Research & Analysis Guidelines
 description: Guidelines for ResearchAgent covering reports, financials, valuation and quant concepts
-keywords: 研报,财报,估值,research report,financial,valuation,factor
+keywords: research report,financial report,valuation,fundamentals,factor
 agents: research
 enabled: true
 ---

@@ -1,22 +1,22 @@
 #!/bin/bash
 
-# AlphaMind 证券投研助手 - Docker 部署脚本
+# AlphaMind Securities Research Assistant - Docker deployment script
 
 
 set -e
 
-# 颜色定义
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# 配置
+# Configuration
 PROJECT_NAME="alphamind"
 COMPOSE_FILE="docker-compose.yml"
 ENV_FILE=".env"
 
-# 函数：打印信息
+# Helper: printing
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -29,26 +29,26 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 函数：检查依赖
+# Check dependencies
 check_dependencies() {
-    print_info "检查依赖..."
+    print_info "Checking dependencies..."
 
     if ! command -v docker &> /dev/null; then
-        print_error "Docker 未安装，请先安装 Docker"
+        print_error "Docker is not installed. Please install Docker first."
         exit 1
     fi
 
     if ! command -v docker-compose &> /dev/null; then
-        print_error "Docker Compose 未安装，请先安装 Docker Compose"
+        print_error "Docker Compose is not installed. Please install Docker Compose first."
         exit 1
     fi
 
-    print_info "依赖检查完成"
+    print_info "Dependency check complete"
 }
 
-# 函数：创建必要的目录
+# Create the required directories
 create_directories() {
-    print_info "创建必要的目录..."
+    print_info "Creating required directories..."
 
     mkdir -p data/chroma
     mkdir -p logs
@@ -57,235 +57,235 @@ create_directories() {
     mkdir -p config/grafana/dashboards
     mkdir -p config/alerts
 
-    print_info "目录创建完成"
+    print_info "Directories created"
 }
 
-# 函数：检查环境变量
+# Check environment configuration
 check_env_file() {
-    print_info "检查环境变量配置..."
+    print_info "Checking environment configuration..."
 
     if [ ! -f "$ENV_FILE" ]; then
-        print_warn ".env 文件不存在，从 .env.example 创建..."
+        print_warn ".env not found, creating it from .env.example..."
 
         if [ -f ".env.example" ]; then
             cp .env.example .env
-            print_info "已创建 .env 文件，请编辑配置"
-            print_warn "特别注意：请设置 ANTHROPIC_API_KEY"
+            print_info ".env created. Please edit it before starting."
+            print_warn "In particular, set ANTHROPIC_API_KEY"
         else
-            print_error ".env.example 文件不存在"
+            print_error ".env.example not found"
             exit 1
         fi
     else
-        print_info "环境变量配置文件已存在"
+        print_info "Environment file already exists"
     fi
 }
 
-# 函数：构建镜像
+# Build images
 build_images() {
-    print_info "构建 Docker 镜像..."
+    print_info "Building Docker images..."
 
     docker-compose build --no-cache
 
-    print_info "镜像构建完成"
+    print_info "Images built"
 }
 
-# 函数：启动服务
+# Start services
 start_services() {
-    print_info "启动服务..."
+    print_info "Starting services..."
 
     docker-compose up -d
 
-    print_info "服务启动完成"
+    print_info "Services started"
 }
 
-# 函数：停止服务
+# Stop services
 stop_services() {
-    print_info "停止服务..."
+    print_info "Stopping services..."
 
     docker-compose down
 
-    print_info "服务已停止"
+    print_info "Services stopped"
 }
 
-# 函数：重启服务
+# Restart services
 restart_services() {
-    print_info "重启服务..."
+    print_info "Restarting services..."
 
     docker-compose restart
 
-    print_info "服务已重启"
+    print_info "Services restarted"
 }
 
-# 函数：查看服务状态
+# Show service status
 status_services() {
-    print_info "服务状态:"
+    print_info "Service status:"
 
     docker-compose ps
 }
 
-# 函数：查看日志
+# Show logs
 view_logs() {
     local service=$1
 
     if [ -z "$service" ]; then
-        print_info "查看所有服务日志..."
+        print_info "Tailing logs for all services..."
         docker-compose logs -f
     else
-        print_info "查看 $service 服务日志..."
+        print_info "Tailing logs for $service..."
         docker-compose logs -f "$service"
     fi
 }
 
-# 函数：健康检查
+# Health check
 health_check() {
-    print_info "执行健康检查..."
+    print_info "Running health checks..."
 
-    # 等待服务启动
+    # Wait for services to come up
     sleep 10
 
-    # 检查主应用
+    # Application
     if curl -sf http://localhost:8000/health > /dev/null; then
-        print_info "✓ 主应用健康"
+        print_info "✓ application healthy"
     else
-        print_error "✗ 主应用不健康"
+        print_error "✗ application unhealthy"
     fi
 
-    # 检查 Redis
+    # Redis
     if docker-compose exec -T redis redis-cli ping | grep -q PONG; then
-        print_info "✓ Redis 健康"
+        print_info "✓ Redis healthy"
     else
-        print_error "✗ Redis 不健康"
+        print_error "✗ Redis unhealthy"
     fi
 
-    # 检查 ChromaDB
+    # ChromaDB
     if curl -sf http://localhost:8001/api/v1/heartbeat > /dev/null; then
-        print_info "✓ ChromaDB 健康"
+        print_info "✓ ChromaDB healthy"
     else
-        print_error "✗ ChromaDB 不健康"
+        print_error "✗ ChromaDB unhealthy"
     fi
 
-    # 检查 Prometheus
+    # Prometheus
     if curl -sf http://localhost:9090/-/healthy > /dev/null; then
-        print_info "✓ Prometheus 健康"
+        print_info "✓ Prometheus healthy"
     else
-        print_error "✗ Prometheus 不健康"
+        print_error "✗ Prometheus unhealthy"
     fi
 }
 
-# 函数：清理资源
+# Clean up resources
 cleanup() {
-    print_warn "清理所有资源（包括数据卷）..."
+    print_warn "Removing all resources, including volumes..."
 
-    read -p "确认清理？这将删除所有数据 (y/N): " -n 1 -r
+    read -p "Confirm cleanup? This deletes all data (y/N): " -n 1 -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         docker-compose down -v
-        print_info "清理完成"
+        print_info "Cleanup complete"
     else
-        print_info "清理已取消"
+        print_info "Cleanup cancelled"
     fi
 }
 
-# 函数：备份数据
+# Back up data
 backup_data() {
     local backup_dir="backups/$(date +%Y%m%d_%H%M%S)"
 
-    print_info "备份数据到 $backup_dir..."
+    print_info "Backing up data to $backup_dir..."
 
     mkdir -p "$backup_dir"
 
-    # 备份 Redis 数据
+    # Redis data
     docker-compose exec -T redis redis-cli SAVE
     docker cp alphamind-redis:/data/dump.rdb "$backup_dir/"
 
-    # 备份 ChromaDB 数据
+    # ChromaDB data
     docker cp alphamind-chromadb:/chroma/chroma "$backup_dir/"
 
-    # 备份配置
+    # Configuration
     cp .env "$backup_dir/"
     cp -r config "$backup_dir/"
 
-    print_info "备份完成: $backup_dir"
+    print_info "Backup complete: $backup_dir"
 }
 
-# 函数：恢复数据
+# Restore data
 restore_data() {
     local backup_dir=$1
 
     if [ -z "$backup_dir" ]; then
-        print_error "请指定备份目录"
+        print_error "Please specify a backup directory"
         exit 1
     fi
 
     if [ ! -d "$backup_dir" ]; then
-        print_error "备份目录不存在: $backup_dir"
+        print_error "Backup directory not found: $backup_dir"
         exit 1
     fi
 
-    print_warn "从 $backup_dir 恢复数据..."
-    read -p "确认恢复？这将覆盖现有数据 (y/N): " -n 1 -r
+    print_warn "Restoring data from $backup_dir..."
+    read -p "Confirm restore? This overwrites existing data (y/N): " -n 1 -r
     echo
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # 停止服务
+        # Stop services
         docker-compose stop
 
-        # 恢复 Redis 数据
+        # Redis data
         docker cp "$backup_dir/dump.rdb" alphamind-redis:/data/
 
-        # 恢复 ChromaDB 数据
+        # ChromaDB data
         docker cp "$backup_dir/chroma" alphamind-chromadb:/chroma/
 
-        # 恢复配置
+        # Configuration
         cp "$backup_dir/.env" .env
         rm -rf config
         cp -r "$backup_dir/config" config
 
-        # 启动服务
+        # Start services
         docker-compose start
 
-        print_info "恢复完成"
+        print_info "Restore complete"
     else
-        print_info "恢复已取消"
+        print_info "Restore cancelled"
     fi
 }
 
-# 函数：显示帮助信息
+# Show help
 show_help() {
     cat << EOF
-AlphaMind 证券投研助手 - Docker 部署脚本
+AlphaMind Securities Research Assistant - Docker deployment script
 
-用法: ./docker-deploy.sh [命令]
+Usage: ./docker-deploy.sh [command]
 
-命令:
-    install     初始化安装（检查依赖、创建目录、构建镜像）
-    start       启动所有服务
-    stop        停止所有服务
-    restart     重启所有服务
-    status      查看服务状态
-    logs        查看服务日志（可选指定服务名）
-    health      执行健康检查
-    build       重新构建镜像
-    cleanup     清理所有资源（包括数据）
-    backup      备份数据
-    restore     恢复数据（需指定备份目录）
-    help        显示此帮助信息
+Commands:
+    install     first-time setup (check dependencies, create directories, build images)
+    start       start all services
+    stop        stop all services
+    restart     restart all services
+    status      show service status
+    logs        tail service logs (optionally for one service)
+    health      run health checks
+    build       rebuild images
+    cleanup     remove all resources, including data
+    backup      back up data
+    restore     restore data (requires a backup directory)
+    help        show this help
 
-示例:
+Examples:
     ./docker-deploy.sh install
     ./docker-deploy.sh start
     ./docker-deploy.sh logs alphamind
     ./docker-deploy.sh backup
     ./docker-deploy.sh restore backups/20231201_120000
 
-环境变量:
-    在 .env 文件中配置相关参数
+Environment:
+    configure settings in the .env file
 
 EOF
 }
 
-# 主函数
+# Main
 main() {
     case "${1:-help}" in
         install)
@@ -293,7 +293,7 @@ main() {
             check_env_file
             create_directories
             build_images
-            print_info "安装完成！运行 './docker-deploy.sh start' 启动服务"
+            print_info "Install complete. Run './docker-deploy.sh start' to start the services."
             ;;
         start)
             check_env_file
@@ -331,12 +331,12 @@ main() {
             show_help
             ;;
         *)
-            print_error "未知命令: $1"
+            print_error "Unknown command: $1"
             show_help
             exit 1
             ;;
     esac
 }
 
-# 执行主函数
+# Run
 main "$@"
