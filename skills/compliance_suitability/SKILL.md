@@ -1,7 +1,7 @@
 ---
 name: Compliance & Suitability Guidelines
 description: Guidelines for AlphaMind's ComplianceAgent covering investor suitability, risk disclosure, account opening, transfers, trading rules and fees
-keywords: 适当性,风险等级,风险测评,风险揭示,r1,r2,r3,r4,r5,开户,销户,账户,银证转账,出金,入金,三方存管,对账单,交割单,费率,佣金,印花税,两融,期权,能买,suitability,risk level,risk assessment,risk disclosure,open account,bank-securities transfer,withdrawal,deposit,statement,fee,commission,can i buy
+keywords: suitability,risk level,risk assessment,risk rating,risk disclosure,r1,r2,r3,r4,r5,open account,close account,bank-securities transfer,withdrawal,deposit,custody,statement,trade confirmation,fee,commission,stamp duty,margin trading,options,can i buy
 agents: compliance
 enabled: true
 ---

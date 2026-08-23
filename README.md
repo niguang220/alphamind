@@ -62,7 +62,9 @@ Configure `.env` (minimum):
 ANTHROPIC_API_KEY=your_api_key
 # Third-party compatible endpoint example:
 # ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
-# ANTHROPIC_MODEL=deepseek-v4-pro
+# Use deepseek-chat. Do NOT use deepseek-v4-pro: it is a reasoning model whose
+# thinking block consumes the whole max_tokens budget, leaving the text block empty.
+# ANTHROPIC_MODEL=deepseek-chat
 ```
 
 ### 4.2 Full stack via Docker Compose

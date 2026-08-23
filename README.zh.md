@@ -60,7 +60,9 @@
 ANTHROPIC_API_KEY=your_api_key
 # 兼容第三方接口示例
 # ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
-# ANTHROPIC_MODEL=deepseek-v4-pro
+# 用 deepseek-chat。不要用 deepseek-v4-pro：它是推理模型，thinking block 会吃光
+# max_tokens 预算，导致 text block 为空、回复空白。
+# ANTHROPIC_MODEL=deepseek-chat
 ```
 
 ### 4.2 Docker Compose 全栈部署

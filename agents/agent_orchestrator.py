@@ -32,15 +32,6 @@ from core.llm_utils import extract_text_content
 logger = logging.getLogger(__name__)
 
 
-def _is_english(text: str) -> bool:
-    """Roughly detect whether the input is mainly English or Chinese, for language-adaptive fixed text (guardrail/clarification/error)."""
-    if not text:
-        return True
-    letters = sum(1 for c in text if c.isascii() and c.isalpha())
-    cjk = sum(1 for c in text if "一" <= c <= "鿿")
-    return letters >= cjk
-
-
 # ── Data structures ──────────────────────────────────────────────────────────
 
 class AgentType(Enum):
@@ -164,8 +155,7 @@ class BaseAgent:
             ms = (time.monotonic() - t0) * 1000
             self.stats.total_ms += ms
             logger.error(f"{self.agent_type.value} failed: {ex}")
-            fallback = ("Sorry, something went wrong while handling your request. Please try again later."
-                        if _is_english(req.message) else "抱歉，处理您的请求时出现问题，请稍后重试。")
+            fallback = "Sorry, something went wrong while handling your request. Please try again later."
             return AgentResponse(
                 agent_type=self.agent_type,
                 content=fallback,
@@ -189,7 +179,7 @@ class BaseAgent:
 
         resp = await self._client.messages.create(
             model=self._model,
-            max_tokens=1024,
+            max_tokens=2048,
             system=self._build_system_prompt(req),
             messages=messages,
         )
@@ -210,8 +200,7 @@ class BaseAgent:
 
     def _needs_escalation(self, content: str) -> bool:
         """Detect whether the agent suggests escalation (simple keyword check)."""
-        keywords = ["转人工", "人工投顾", "投资顾问", "无法处理",
-                    "escalate", "human advisor", "investment advisor", "cannot handle"]
+        keywords = ["escalate", "human advisor", "cannot handle"]
         return any(kw in content for kw in keywords)
 
 
@@ -340,9 +329,7 @@ class AgentOrchestrator:
 
         if self._needs_clarification(req):
             clarify = ("I'm not sure which category your question falls into. Is it about market / product information, "
-                       "research analysis (reports / valuation / financials), or account / suitability / trading rules?"
-                       if _is_english(req.message) else
-                       "我还不能确定您的问题类别。请问是行情/产品信息、投研分析（研报/估值/财报），还是账户/适当性/交易规则？")
+                       "research analysis (reports / valuation / financials), or account / suitability / trading rules?")
             return OrchestratorResult(
                 request_id=req.request_id,
                 response=clarify,
@@ -408,8 +395,7 @@ class AgentOrchestrator:
         if parts:
             combined = "\n\n".join(parts)
         else:
-            combined = ("Sorry, all agents failed to process the request."
-                        if _is_english(req.message) else "抱歉，所有 Agent 均处理失败。")
+            combined = "Sorry, all agents failed to process the request."
         escalated = any(isinstance(r, AgentResponse) and r.escalate for r in responses)
 
         return OrchestratorResult(
@@ -538,9 +524,15 @@ class AgentOrchestrator:
         ):
             scores[AgentType.COMPLIANCE] += 0.75
 
-        research_kws = ["研报", "财报", "年报", "季报", "估值", "市盈率", "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "营收", "净利润"]
-        compliance_kws = ["开户", "销户", "适当性", "风险等级", "风险测评", "风险揭示", "银证转账", "出金", "入金", "对账单", "交割单", "佣金", "费率", "r1", "r2", "r3", "r4", "r5"]
-        market_kws = ["行情", "指数", "股价", "etf", "基金", "点位", "术语", "什么意思", "涨跌停", "交易时间"]
+        research_kws = ["research report", "annual report", "quarterly report", "earnings", "valuation",
+                        "p/e", "pe ratio", "p/b", "roe", "factor", "backtest", "sharpe", "drawdown",
+                        "fundamentals", "revenue", "net profit"]
+        compliance_kws = ["open an account", "close an account", "suitability", "risk level", "risk rating",
+                          "risk assessment", "risk disclosure", "bank transfer", "withdraw", "deposit",
+                          "statement", "trade confirmation", "commission", "fee rate",
+                          "r1", "r2", "r3", "r4", "r5"]
+        market_kws = ["quote", "index", "share price", "etf", "fund", "index level", "terminology",
+                      "what does it mean", "limit up", "limit down", "trading hours"]
 
         research_hits = sum(1 for kw in research_kws if kw in msg)
         compliance_hits = sum(1 for kw in compliance_kws if kw in msg)
@@ -588,8 +580,10 @@ class AgentOrchestrator:
         msg = req.message.lower()
         targets: List[AgentType] = []
 
-        research_kws = ["研报", "财报", "估值", "市盈率", "因子", "回测", "基本面", "跟踪误差", "对比"]
-        compliance_kws = ["适当性", "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金", "费率", "能买"]
+        research_kws = ["research report", "earnings", "valuation", "p/e", "pe ratio", "factor",
+                        "backtest", "fundamentals", "tracking error", "compare"]
+        compliance_kws = ["suitability", "risk level", "risk rating", "risk assessment", "risk disclosure",
+                          "open an account", "bank transfer", "withdraw", "deposit", "fee rate", "can i buy"]
 
         if req.intent in (
             IntentCategory.RESEARCH_REPORT,
@@ -625,11 +619,6 @@ class AgentOrchestrator:
     # ── Investment-advice guardrail ───────────────────────────────────────────
     # On a hit, intercept: give no individual buy/sell advice, timing calls or return promises; return a risk disclosure + human advisor.
     _GUARDRAIL_KEYWORDS = [
-        # Chinese
-        "推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨", "能涨到", "涨不涨",
-        "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "帮我卖", "代客",
-        "全仓", "梭哈", "抄底", "能不能买", "值不值得买", "要不要买",
-        # English
         "recommend", "should i buy", "should i sell", "will it go up", "will it rise",
         "guaranteed", "buy for me", "sell for me", "place a buy order", "place an order",
         "trade for me", "which to buy", "what to buy", "worth buying", "all in",
@@ -644,27 +633,17 @@ class AgentOrchestrator:
         return any(kw in msg for kw in self._GUARDRAIL_KEYWORDS)
 
     def _guardrail_response(self, req: Request, elapsed_ms: float) -> OrchestratorResult:
-        """Guardrail-safe response: compliant refusal + risk disclosure + escalation, bypassing domain agents. Language follows the user."""
-        if _is_english(req.message):
-            text = (
-                "AlphaMind provides securities research information and investor education. "
-                "This does not constitute investment advice, and I cannot make buy/sell decisions or place orders for you.\n"
-                "Regarding buy/sell judgments on a specific security or product, please note:\n"
-                "1. Securities investing carries risk; past performance does not indicate future results, and no one can guarantee returns or principal;\n"
-                "2. Whether a product suits you depends on your risk tolerance (suitability / risk rating R1-R5) and objectives;\n"
-                "3. For specific buy/sell decisions, please consult a licensed investment advisor.\n"
-                "I can help you: interpret the fundamentals / valuation / research highlights of the security, "
-                "explain product risks and trading rules, or connect you to a human advisor."
-            )
-        else:
-            text = (
-                "AlphaMind 提供证券投研信息与投资者教育，不构成投资建议，也不能代您做出买卖决策或下单。\n"
-                "关于个股/产品的买卖判断，请注意以下风险提示：\n"
-                "1. 证券投资有风险，历史表现不代表未来收益，任何人都无法保证收益或保本；\n"
-                "2. 是否适合某产品，取决于您的风险承受能力（适当性/风险等级 R1-R5）与投资目标；\n"
-                "3. 具体买卖决策建议咨询持牌投资顾问。\n"
-                "我可以帮您：解读该标的的基本面/估值/研报要点、说明产品风险与交易规则，或为您转接人工投顾。"
-            )
+        """Guardrail-safe response: compliant refusal + risk disclosure + escalation, bypassing domain agents."""
+        text = (
+            "AlphaMind provides securities research information and investor education. "
+            "This does not constitute investment advice, and I cannot make buy/sell decisions or place orders for you.\n"
+            "Regarding buy/sell judgments on a specific security or product, please note:\n"
+            "1. Securities investing carries risk; past performance does not indicate future results, and no one can guarantee returns or principal;\n"
+            "2. Whether a product suits you depends on your risk tolerance (suitability / risk rating R1-R5) and objectives;\n"
+            "3. For specific buy/sell decisions, please consult a licensed investment advisor.\n"
+            "I can help you: interpret the fundamentals / valuation / research highlights of the security, "
+            "explain product risks and trading rules, or connect you to a human advisor."
+        )
         return OrchestratorResult(
             request_id=req.request_id,
             response=text,
@@ -696,8 +675,7 @@ class AgentOrchestrator:
         if agent is None:
             return AgentResponse(
                 agent_type=AgentType.MARKET,
-                content=("Service is temporarily unavailable, please try again later."
-                         if _is_english(req.message) else "服务暂时不可用，请稍后重试。"),
+                content="Service is temporarily unavailable, please try again later.",
                 success=False,
             )
 

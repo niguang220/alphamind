@@ -1,7 +1,7 @@
 ---
 name: Market & Information Guidelines
 description: Guidelines for AlphaMind's MarketAgent covering market quotes, indices, stock/ETF product information and term explanations
-keywords: 行情,指数,股价,涨跌,点位,etf,基金,跟踪误差,费率,成分股,重仓,术语,是什么,什么意思,交易时间,涨跌停,t+1,概念,market,index,quote,price,fund,tracking error,fee,holdings,term,what is,what does,trading hours,price limit
+keywords: market,index,quote,share price,price,points,etf,fund,tracking error,fee,expense ratio,holdings,term,terminology,what is,what does,trading hours,price limit,limit up,limit down,t+1,concept
 agents: market
 enabled: true
 ---

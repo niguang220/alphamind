@@ -378,16 +378,10 @@ def _should_use_knowledge(message: str, intent=None) -> bool:
         "account", "funding", "suitability", "risk_disclosure", "statement",
     }:
         return True
-    greetings = {"你好", "您好", "嗨", "hi", "hello", "hey", "早上好", "晚上好"}
+    greetings = {"hi", "hello", "hey", "good morning", "good evening"}
     if msg in greetings:
         return False
     business_keywords = [
-        # Chinese
-        "行情", "指数", "股价", "etf", "基金", "研报", "财报", "估值", "市盈率",
-        "pe", "pb", "roe", "因子", "回测", "夏普", "回撤", "基本面", "适当性",
-        "风险等级", "风险测评", "风险揭示", "开户", "银证转账", "出金", "入金",
-        "对账单", "交割单", "费率", "佣金", "涨跌停", "t+1", "术语",
-        # English
         "market", "index", "quote", "etf", "fund", "research", "financial", "valuation",
         "p/e", "roe", "factor", "backtest", "sharpe", "drawdown", "fundamental",
         "suitability", "risk level", "risk rating", "risk disclosure", "account",
@@ -626,7 +620,7 @@ async def _cli():
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye")
             break
-        if not msg or msg.lower() in ("quit", "exit", "退出"):
+        if not msg or msg.lower() in ("quit", "exit"):
             print("Goodbye")
             break
 

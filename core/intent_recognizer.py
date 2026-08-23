@@ -137,9 +137,10 @@ _INTENT_GROUPS: Dict[IntentCategory, str] = {
 
 # urgency keywords
 _URGENCY_KEYWORDS = {
-    UrgencyLevel.CRITICAL: ["紧急", "emergency", "urgent", "asap", "立刻", "爆仓", "强平", "被盗", "资金异常"],
-    UrgencyLevel.HIGH:     ["今天", "马上", "尽快", "hurry", "now"],
-    UrgencyLevel.MEDIUM:   ["这周", "soon", "快点"],
+    UrgencyLevel.CRITICAL: ["emergency", "urgent", "asap", "margin call", "forced liquidation",
+                            "stolen", "unauthorized transaction"],
+    UrgencyLevel.HIGH:     ["today", "right away", "hurry", "now"],
+    UrgencyLevel.MEDIUM:   ["this week", "soon"],
 }
 
 
@@ -322,48 +323,48 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
     def _pattern_recognize(self, message: str) -> Dict[str, Any]:
         """Strategy 3: keyword pattern matching (synchronous, zero-latency fallback)."""
         msg = message.lower()
-        # Bilingual keywords: keep Chinese and add English so both-language input matches (recognition is LLM-first; keywords are a fallback).
+        # English keywords only: they are a zero-latency fallback. Non-English input is handled by the LLM branch.
         specific_patterns = {
-            IntentCategory.ADVICE_REQUEST: ["推荐", "买哪", "该买", "该不该买", "会涨", "会不会涨",
-                "能涨到", "涨不涨", "保本", "保收益", "稳赚", "包赚", "帮我下单", "帮我买", "代客", "全仓", "梭哈", "抄底",
+            IntentCategory.ADVICE_REQUEST: [
                 "recommend", "should i buy", "should i sell", "which to buy", "what to buy", "will it go up",
                 "will it rise", "guaranteed", "buy for me", "place a buy order", "worth buying", "all in", "price target"],
-            IntentCategory.RESEARCH_REPORT: ["研报", "研究报告", "券商报告", "评级报告",
+            IntentCategory.RESEARCH_REPORT: [
                 "research report", "broker report", "analyst report", "rating report"],
-            IntentCategory.FUNDAMENTAL: ["财报", "年报", "季报", "营收", "净利润", "毛利率", "基本面",
+            IntentCategory.FUNDAMENTAL: [
                 "financial report", "annual report", "quarterly report", "revenue", "net profit", "gross margin", "fundamentals", "earnings"],
-            IntentCategory.VALUATION: ["估值", "市盈率", "pe", "pb", "市净率", "roe", "分位",
-                "valuation", "p/e", "p/b", "percentile", "market cap"],
-            IntentCategory.QUANT_CONCEPT: ["因子", "回测", "夏普", "最大回撤", "波动率", "beta", "阿尔法", "alpha",
-                "factor", "backtest", "sharpe", "drawdown", "volatility"],
-            IntentCategory.COMPARISON: ["对比", "比较", "哪个更好", "区别", "vs",
-                "compare", "comparison", "which is better", "difference"],
-            IntentCategory.PRODUCT_INFO: ["etf", "基金", "跟踪误差", "成分股", "重仓", "费率", "申赎",
-                "fund", "tracking error", "holdings", "expense ratio", "fee"],
-            IntentCategory.TRADING_RULE: ["t+1", "涨跌停", "交易时间", "交易时段", "集合竞价", "佣金", "印花税", "过户费",
-                "price limit", "trading hours", "auction", "commission", "stamp duty", "settlement"],
-            IntentCategory.TERM_EXPLAIN: ["什么意思", "怎么理解", "是什么", "什么叫", "概念",
+            IntentCategory.VALUATION: [
+                "valuation", "p/e", "p/b", "pe ratio", "pb ratio", "roe", "percentile", "market cap"],
+            IntentCategory.QUANT_CONCEPT: [
+                "factor", "backtest", "sharpe", "drawdown", "volatility", "beta", "alpha"],
+            IntentCategory.COMPARISON: [
+                "compare", "comparison", "which is better", "difference", "vs"],
+            IntentCategory.PRODUCT_INFO: [
+                "etf", "fund", "tracking error", "holdings", "expense ratio", "fee"],
+            IntentCategory.TRADING_RULE: [
+                "t+1", "price limit", "trading hours", "auction", "commission", "stamp duty", "settlement"],
+            IntentCategory.TERM_EXPLAIN: [
                 "what does", "what is", "meaning of", "how to understand", "definition"],
-            IntentCategory.MARKET_QUOTE: ["行情", "指数", "点位", "股价", "涨了", "跌了", "多少点",
-                "index", "quote", "points", "went up", "went down"],
-            IntentCategory.SUITABILITY: ["风险测评", "适当性", "风险等级", "r1", "r2", "r3", "r4", "r5", "能买",
-                "suitability", "risk level", "risk assessment", "risk rating", "can i buy", "am i allowed"],
-            IntentCategory.RISK_DISCLOSURE: ["风险揭示", "有什么风险", "风险提示", "杠杆风险",
+            IntentCategory.MARKET_QUOTE: [
+                "index", "quote", "points", "share price", "went up", "went down"],
+            IntentCategory.SUITABILITY: [
+                "suitability", "risk level", "risk assessment", "risk rating",
+                "r1", "r2", "r3", "r4", "r5", "can i buy", "am i allowed"],
+            IntentCategory.RISK_DISCLOSURE: [
                 "risk disclosure", "what are the risks", "risk warning", "leverage risk"],
-            IntentCategory.ACCOUNT: ["开户", "销户", "账户", "绑定银行卡", "三方存管",
+            IntentCategory.ACCOUNT: [
                 "open an account", "open account", "close account", "bank card", "custody"],
-            IntentCategory.FUNDING: ["银证转账", "出金", "入金", "转账", "资金流水", "到账",
+            IntentCategory.FUNDING: [
                 "bank-securities transfer", "withdrawal", "deposit", "cash flow"],
-            IntentCategory.STATEMENT: ["对账单", "交割单", "交易流水", "税务凭证",
+            IntentCategory.STATEMENT: [
                 "account statement", "trade confirmation", "transaction record"],
-            IntentCategory.HUMAN_HANDOFF: ["转人工", "人工投顾", "找人工", "投资顾问",
+            IntentCategory.HUMAN_HANDOFF: [
                 "human advisor", "real person", "investment advisor", "talk to someone"],
         }
         generic_patterns = {
-            IntentCategory.ESCALATION: ["投诉", "主管", "经理", "supervisor", "complaint", "manager"],
-            IntentCategory.COMPLAINT:  ["太差", "糟糕", "垃圾", "等了很久", "terrible", "awful", "worst"],
-            IntentCategory.GREETING:   ["你好", "在吗", "早上好", "hello", "good morning"],
-            IntentCategory.FEEDBACK:   ["谢谢", "感谢", "很清楚", "点赞", "满意", "thank", "helpful", "great"],
+            IntentCategory.ESCALATION: ["supervisor", "complaint", "manager"],
+            IntentCategory.COMPLAINT:  ["terrible", "awful", "worst"],
+            IntentCategory.GREETING:   ["hello", "good morning"],
+            IntentCategory.FEEDBACK:   ["thank", "helpful", "great"],
         }
 
         best_cat, best_score = self._best_pattern_match(msg, specific_patterns)
@@ -415,18 +416,20 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
     def _extract_entities(self, message: str) -> Dict[str, List[str]]:
         """Extract high-value entities by rules to avoid an extra LLM call each time."""
         message = self._clean_text(message)
-        # Note: Chinese chars are \w in Python re, so we cannot rely on \b for the left boundary
-        # (e.g. no \b between the Chinese char and R in "级R3"); use lookaround so it matches next to Chinese too.
+        # Note: use lookaround rather than \b for the left boundary, so a token still matches
+        # when it sits directly next to a non-ASCII character (non-ASCII letters count as \w in Python re).
         return {
             "ticker": self._unique(re.findall(r"(?<![A-Za-z0-9])(\d{6}|[A-Z]{2,5})(?![A-Za-z0-9])", message)),
             "metric": self._unique(re.findall(
-                r"(市盈率|市净率|夏普比率|最大回撤|波动率|市盈|夏普|P/E|P/B|P/S|PE|PB|ROE|ROA|EPS|Sharpe|drawdown|Beta|Alpha|阿尔法|贝塔)",
+                r"(P/E|P/B|P/S|PE|PB|ROE|ROA|EPS|Sharpe|drawdown|volatility|Beta|Alpha)",
                 message, re.I)),
             "risk_level": [v.upper() for v in self._unique(
                 re.findall(r"(?<![A-Za-z])([RrCc][1-5])(?![0-9])", message))],
-            "percentage": self._unique(re.findall(r"(\d+(?:\.\d+)?\s*%|百分之\d+(?:\.\d+)?)", message)),
-            "amount": self._unique(re.findall(r"((?:¥|￥)\s*\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s*(?:元|万元|万|块|rmb|cny|usd|美元))", message, re.I)),
-            "date": self._unique(re.findall(r"(今天|明天|昨天|本周|这周|下周|今年|去年|\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", message)),
+            "percentage": self._unique(re.findall(r"(\d+(?:\.\d+)?\s*%)", message)),
+            "amount": self._unique(re.findall(r"((?:¥|￥|\$)\s*\d+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?\s*(?:rmb|cny|usd))", message, re.I)),
+            "date": self._unique(re.findall(
+                r"(today|tomorrow|yesterday|this week|next week|last week|this year|last year|"
+                r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2})", message, re.I)),
         }
 
     # ── Helpers ───────────────────────────────────────────────────────────────
