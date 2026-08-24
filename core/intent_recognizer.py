@@ -377,14 +377,25 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
     # ── Vote merge ────────────────────────────────────────────────────────────
 
     def _vote(self, llm: Dict, emb: Dict, pat: Dict) -> tuple[IntentCategory, float, Dict[str, float]]:
-        """Weighted voting. Returns the final intent, fused confidence, and per-source scores."""
+        """
+        Weighted voting. Returns the final intent, fused confidence, and per-source scores.
+
+        A route that did not run is left out of source_scores rather than reported as 0.0,
+        so a caller can tell "scored nothing" apart from "never asked" — 0.0 is a legitimate
+        answer from a live route, and conflating the two mislabels a working one as disabled.
+        """
         source_scores = {
             "llm": float(llm.get("confidence", 0.0) or 0.0),
-            "embedding": float(emb.get("confidence", 0.0) or 0.0),
             "pattern": float(pat.get("confidence", 0.0) or 0.0),
         }
+        if self._embedding_enabled:
+            source_scores["embedding"] = float(emb.get("confidence", 0.0) or 0.0)
         if llm.get("failed"):
-            if emb.get("intent") != IntentCategory.OTHER and emb.get("confidence", 0.0) > 0:
+            if (
+                self._embedding_enabled
+                and emb.get("intent") != IntentCategory.OTHER
+                and emb.get("confidence", 0.0) > 0
+            ):
                 return emb["intent"], source_scores["embedding"], source_scores
             if pat.get("intent") != IntentCategory.OTHER and pat.get("confidence", 0.0) > 0:
                 return pat["intent"], source_scores["pattern"], source_scores

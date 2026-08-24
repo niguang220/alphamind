@@ -56,3 +56,25 @@ def test_entities_exchange_suffixes():
     r = _rec()
     assert "600519.SH" in r._extract_entities("compare 600519.SH with peers")["ticker"]
     assert "00700.HK" in r._extract_entities("what about 00700.HK")["ticker"]
+
+
+def test_vote_omits_routes_that_did_not_run():
+    """A disabled route must be absent, not reported as a 0.0 score."""
+    r = _rec()  # base_url set -> embedding route off
+    llm = {"intent": IntentCategory.VALUATION, "confidence": 0.9}
+    emb = {"intent": IntentCategory.OTHER, "confidence": 0.0}
+    pat = {"intent": IntentCategory.VALUATION, "confidence": 0.6}
+    _, _, scores = r._vote(llm, emb, pat)
+    assert "embedding" not in scores, scores
+    assert set(scores) == {"llm", "pattern"}
+
+
+def test_vote_survives_llm_failure_without_embedding():
+    """The LLM-failure fallback must not reach for a route that never ran."""
+    r = _rec()
+    llm = {"intent": IntentCategory.OTHER, "confidence": 0.0, "failed": True}
+    emb = {"intent": IntentCategory.VALUATION, "confidence": 0.8}
+    pat = {"intent": IntentCategory.SUITABILITY, "confidence": 0.7}
+    intent, conf, scores = r._vote(llm, emb, pat)
+    assert intent == IntentCategory.SUITABILITY  # falls to pattern, not the dead embedding route
+    assert "embedding" not in scores

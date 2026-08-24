@@ -74,7 +74,7 @@ export default function GuardrailCard({ turn }) {
 
         {tail.length > 0 && (
           <div className="mt-5 border-t border-rule pt-4">
-            <div className="label mb-2">What it can do instead</div>
+            <div className="label mb-2">What I can do instead</div>
             {tail.map((p, i) => (
               <p key={i} className="text-[13px] leading-[1.6] text-ink-mute">
                 {p}
@@ -84,12 +84,9 @@ export default function GuardrailCard({ turn }) {
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-brass/25 bg-brass/[0.04] px-5 py-2.5">
-        <span className="font-mono text-[10px] tracking-[0.1em] text-brass/80 uppercase">
-          → escalated to human advisor
-        </span>
-        <span className="tabular text-[10px] text-ink-faint">
-          {turn.routing_reason}
+      <footer className="border-t border-brass/25 bg-brass/[0.04] px-5 py-3">
+        <span className="text-[12.5px] text-brass/90">
+          Escalated to a licensed advisor — intercepted before any agent ran.
         </span>
       </footer>
     </article>

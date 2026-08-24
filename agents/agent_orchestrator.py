@@ -101,7 +101,10 @@ class OrchestratorResult:
     primary_agent: Optional[AgentType] = None
     supporting_agents: List[AgentType] = field(default_factory=list)
     routing_reason: str = ""
-    routing_confidence: float = 0.0
+    # Domain score of the agent that took the turn: an additive sum of intent, keyword and
+    # entity bonuses, so it is unbounded and is not a probability. None when the route was
+    # decided by a rule rather than by scoring.
+    routing_score: Optional[float] = None
 
 
 @dataclass
@@ -110,7 +113,8 @@ class RoutingDecision:
     primary_agent: AgentType
     supporting_agents: List[AgentType] = field(default_factory=list)
     reason: str = ""
-    confidence: float = 0.0
+    # Additive domain score, unbounded; None when a rule decided the route.
+    score: Optional[float] = None
 
     @property
     def agent_types(self) -> List[AgentType]:
@@ -385,7 +389,7 @@ class AgentOrchestrator:
             primary_agent=decision.primary_agent,
             supporting_agents=[],
             routing_reason=decision.reason,
-            routing_confidence=decision.confidence,
+            routing_score=decision.score,
         )
 
     async def run_parallel(self, req: Request, decision: RoutingDecision) -> OrchestratorResult:
@@ -425,7 +429,7 @@ class AgentOrchestrator:
             primary_agent=decision.primary_agent,
             supporting_agents=decision.supporting_agents,
             routing_reason=decision.reason,
-            routing_confidence=decision.confidence,
+            routing_score=decision.score,
         )
 
     # ── Routing logic ─────────────────────────────────────────────────────────
@@ -459,14 +463,14 @@ class AgentOrchestrator:
             return RoutingDecision(
                 primary_agent=AgentType.ESCALATION,
                 reason="urgency=CRITICAL, escalation route",
-                confidence=1.0,
+                score=None,
             )
 
         if req.intent in (IntentCategory.ESCALATION, IntentCategory.HUMAN_HANDOFF):
             return RoutingDecision(
                 primary_agent=AgentType.ESCALATION,
                 reason=f"intent={req.intent.value if req.intent else 'unknown'}, escalation route",
-                confidence=max(req.intent_confidence, 0.8),
+                score=None,
             )
 
         scores = self._domain_scores(req)
@@ -479,7 +483,7 @@ class AgentOrchestrator:
             return RoutingDecision(
                 primary_agent=AgentType.MARKET,
                 reason="no specialized agent available, fallback to MarketAgent",
-                confidence=0.1,
+                score=0.1,
             )
 
         ordered = sorted(available_scores.items(), key=lambda item: item[1], reverse=True)
@@ -495,7 +499,7 @@ class AgentOrchestrator:
             primary_agent=primary_agent,
             supporting_agents=supporting_agents,
             reason=reason,
-            confidence=round(min(primary_score, 1.0), 3),
+            score=round(primary_score, 3),
         )
 
     def _domain_scores(self, req: Request) -> Dict[AgentType, float]:
@@ -667,7 +671,7 @@ class AgentOrchestrator:
             agent_types=[AgentType.ESCALATION],
             primary_agent=AgentType.ESCALATION,
             routing_reason=f"guardrail=advice_request,intent={req.intent.value if req.intent else 'unknown'}",
-            routing_confidence=1.0,
+            routing_score=None,  # guardrail is a rule, not a score
         )
 
     def _best_agent(self, agent_type: AgentType) -> Optional[BaseAgent]:

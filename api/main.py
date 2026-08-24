@@ -8,6 +8,7 @@ import logging
 import os
 import pathlib
 import sys
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
@@ -38,6 +39,11 @@ BANNER = r"""
    ║   Securities Research Assistant    ║
    ╚════════════════════════════════════╝
 """
+
+# Retrieval returns nearest neighbours regardless of relevance; cosine scores here go
+# negative for documents that merely share the collection. Anything at or below this floor
+# is noise and is neither shown to the model nor counted as knowledge use.
+KNOWLEDGE_SCORE_FLOOR = 0.0
 
 # ── Global components (initialized in lifespan) ──────────────────────────────
 _orchestrator = None
@@ -217,10 +223,16 @@ class ChatResponse(BaseModel):
     primary_agent: str = ""
     supporting_agents: List[str] = Field(default_factory=list)
     routing_reason: str = ""
-    routing_confidence: float = 0.0
+    # Unbounded additive domain score, not a probability; absent when a rule decided the route.
+    routing_score: Optional[float] = None
     escalated:   bool
+    # Wall-clock for the whole request. The orchestrator's own figure covers only its
+    # slice, which excludes memory, intent recognition and retrieval — reporting that as
+    # the user-visible latency understated a guardrail turn by its entire duration.
     latency_ms:  float
+    timings:     Dict[str, float] = Field(default_factory=dict)
     knowledge_used: bool = False
+    knowledge_score: Optional[float] = None
     entities: Dict[str, List[str]] = Field(default_factory=dict)
     intent_confidence: float = 0.0
     intent_source_scores: Dict[str, float] = Field(default_factory=dict)
@@ -267,8 +279,21 @@ async def chat(req: ChatRequest):
 
     conv_id = req.conv_id or str(uuid.uuid4())
 
+    # Time each stage separately. The orchestrator measures only its own slice, so anything
+    # shown to a caller as "how long this took" has to be counted out here instead.
+    t_start = time.monotonic()
+    lap = t_start
+
+    def _lap() -> float:
+        nonlocal lap
+        now = time.monotonic()
+        elapsed = (now - lap) * 1000
+        lap = now
+        return round(elapsed, 1)
+
     # 1. read memory context
     mem_ctx = await _memory.get_context(req.user_id, conv_id, query=req.message)
+    ms_memory = _lap()
 
     # 2. build the orchestration request (with history, used as intent-recognition context)
     history = [
@@ -277,7 +302,11 @@ async def chat(req: ChatRequest):
     ] if mem_ctx.recent_messages else None
 
     intent_result = await _orchestrator.recognize_intent(req.message, history=history)
-    knowledge_text, knowledge_used = await _build_knowledge_context(req.message, intent=intent_result.intent)
+    ms_intent = _lap()
+    knowledge_text, knowledge_used, knowledge_score = await _build_knowledge_context(
+        req.message, intent=intent_result.intent
+    )
+    ms_knowledge = _lap()
     context_parts = [mem_ctx.to_prompt_text()]
     if knowledge_text:
         context_parts.append(knowledge_text)
@@ -298,6 +327,8 @@ async def chat(req: ChatRequest):
 
     # 3. execute
     result = await _orchestrator.run(orch_req)
+    ms_orchestration = _lap()
+    ms_total = round((time.monotonic() - t_start) * 1000, 1)
 
     # 4. write memory
     await _memory.add_message(req.user_id, conv_id, MsgRole.USER, req.message)
@@ -316,51 +347,70 @@ async def chat(req: ChatRequest):
         primary_agent=result.primary_agent.value if result.primary_agent else result.agent_type.value,
         supporting_agents=[agent_type.value for agent_type in result.supporting_agents],
         routing_reason=result.routing_reason,
-        routing_confidence=result.routing_confidence,
+        routing_score=result.routing_score,
         escalated=result.escalated,
-        latency_ms=round(result.latency_ms, 1),
+        latency_ms=ms_total,
+        timings={
+            "memory": ms_memory,
+            "intent": ms_intent,
+            "knowledge": ms_knowledge,
+            "orchestration": ms_orchestration,
+            "total": ms_total,
+        },
         knowledge_used=knowledge_used,
+        knowledge_score=round(knowledge_score, 4) if knowledge_score is not None else None,
         entities=intent_result.entities,
         intent_confidence=round(intent_result.confidence, 4),
         intent_source_scores=intent_result.source_scores,
     )
 
 
-async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) -> tuple[str, bool]:
+async def _build_knowledge_context(message: str, intent=None, top_k: int = 3) -> tuple[str, bool, Optional[float]]:
     """
     Build the RAG knowledge context for the /chat pipeline.
 
     Reuses MCPToolManager's query rewrite, parallel recall, rerank and fallback.
+
+    Returns (context, used, top_score). Retrieval returns its nearest neighbours whether or
+    not they are relevant, and cosine scores here run negative for documents that merely
+    exist in the same collection. Passing those through padded the prompt with noise and
+    lit a "knowledge used" flag above answers that then said the knowledge base had nothing
+    on the subject, so anything at or below the floor is dropped and does not count as use.
     """
-    if _tool_manager is None:
-        return "", False
-    if not _should_use_knowledge(message, intent=intent):
-        return "", False
+    if _tool_manager is None or not _should_use_knowledge(message, intent=intent):
+        return "", False, None
     try:
         result = await _tool_manager.search_with_rewrite("knowledge_search", message, top_k=top_k)
         if not result.success or not isinstance(result.data, list) or not result.data:
-            return "", False
+            return "", False, None
 
         parts = ["[Knowledge base results]"]
-        used = False
-        for i, item in enumerate(result.data[:top_k], start=1):
+        kept = 0
+        top_score: Optional[float] = None
+        for item in result.data[:top_k]:
             if not isinstance(item, dict):
                 continue
-            title = str(item.get("title", "Untitled document"))
             content = str(item.get("content", "")).strip()
-            score = item.get("score", "")
             if not content:
                 continue
-            used = True
-            parts.append(f"{i}. Title: {title}\n   Relevance: {score}\n   Content: {content[:600]}")
+            try:
+                score = float(item.get("score"))
+            except (TypeError, ValueError):
+                continue
+            if score <= KNOWLEDGE_SCORE_FLOOR:
+                continue
+            kept += 1
+            top_score = score if top_score is None else max(top_score, score)
+            title = str(item.get("title", "Untitled document"))
+            parts.append(f"{kept}. Title: {title}\n   Relevance: {score:.4f}\n   Content: {content[:600]}")
 
-        if not used:
-            return "", False
+        if not kept:
+            return "", False, None
         parts.append("Answer primarily based on the knowledge above; if it is insufficient, supplement with general investment-research information, and never give individual stock buy/sell advice.")
-        return "\n".join(parts), True
+        return "\n".join(parts), True, top_score
     except Exception as ex:
         logger.warning(f"failed to build knowledge context: {ex}")
-        return "", False
+        return "", False, None
 
 
 def _should_use_knowledge(message: str, intent=None) -> bool:

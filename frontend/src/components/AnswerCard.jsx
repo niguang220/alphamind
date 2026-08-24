@@ -13,7 +13,7 @@ export default function AnswerCard({ turn, selected, onSelect }) {
         selected ? 'border-rule-bright' : 'border-rule hover:border-rule-bright/70'
       }`}
     >
-      <header className="flex flex-wrap items-center gap-2 border-b border-rule px-5 py-2.5">
+      <header className="flex flex-wrap items-center gap-2 border-b border-rule px-5 py-3">
         <span
           className="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase"
           style={{ color: meta.color }}
@@ -23,8 +23,8 @@ export default function AnswerCard({ turn, selected, onSelect }) {
         </span>
 
         <span className="text-[10px] text-ink-faint">/</span>
-        <span className="font-mono text-[10px] tracking-[0.08em] text-ink-mute">
-          {turn.intent}
+        <span className="font-mono text-[11px] tracking-[0.06em] text-ink-mute">
+          {(turn.intent || '').replace(/_/g, ' ')}
         </span>
 
         {supporting.length > 0 && (
@@ -39,15 +39,11 @@ export default function AnswerCard({ turn, selected, onSelect }) {
         )}
 
         <span className="ml-auto flex items-center gap-2">
-          {turn.knowledge_used && <Chip color="var(--color-teal)">kb hit</Chip>}
-          {turn.escalated && <Chip color="var(--color-ember)">escalated</Chip>}
-          <span className="tabular text-[10px] text-ink-faint">
-            {Math.round(turn.latency_ms)} ms
-          </span>
+          {turn.knowledge_used && <Chip color="var(--color-teal)">cited</Chip>}
         </span>
       </header>
 
-      <div className="px-5 py-4">
+      <div className="px-5 py-5">
         <Markdown text={turn.response} />
       </div>
     </article>

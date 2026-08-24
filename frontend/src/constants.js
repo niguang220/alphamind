@@ -29,56 +29,57 @@ export const agentMeta = (key) =>
   AGENTS[key] ?? { label: key || 'unknown', full: key || 'unknown', color: 'var(--color-ink-mute)', blurb: '' }
 
 /**
- * The four stages are the real ones in AgentOrchestrator.run():
- *   intent recognition -> guardrail -> routing decision -> agent execution.
- * The per-stage durations below are indicative pacing, not backend telemetry —
- * the backend returns one response, and the only measured number we show is the
- * end-to-end latency_ms it reports.
+ * The four stages of a /chat request, each timed on the server and returned in
+ * `timings`. Nothing here is estimated: the bars show what the request actually spent.
  */
 export const STAGES = [
-  { id: 'intent', label: 'Intent', detail: 'read the question', at: 0 },
-  { id: 'guardrail', label: 'Guardrail', detail: 'advice check', at: 700 },
-  { id: 'routing', label: 'Routing', detail: 'match an agent', at: 1200 },
-  { id: 'generation', label: 'Generation', detail: 'write the answer', at: 1800 },
+  { id: 'memory', label: 'Memory', detail: 'recall the thread', key: 'memory' },
+  { id: 'intent', label: 'Intent', detail: 'classify the question', key: 'intent' },
+  { id: 'knowledge', label: 'Knowledge', detail: 'retrieve sources', key: 'knowledge' },
+  { id: 'orchestration', label: 'Agent', detail: 'screen, route, answer', key: 'orchestration' },
 ]
 
 export const SAMPLES = [
   {
-    text: 'recommend a stock that will double',
+    text: 'should I buy into this dip',
     tag: 'Guardrail',
-    note: 'Stopped by the guardrail',
+    note: 'Screened out before any agent runs',
     color: 'var(--color-brass)',
   },
   {
-    text: "is the CSI 300 ETF's valuation expensive? show P/E and ROE",
+    text: 'what is the difference between a broad-based index ETF and a sector ETF',
     tag: 'Research',
-    note: 'Pulls from the knowledge base',
+    note: 'Cites the product guide',
     color: 'var(--color-teal)',
   },
   {
-    text: 'my risk assessment is R2, can I open margin trading?',
+    text: 'what does a risk rating of R3 allow me to buy',
     tag: 'Compliance',
-    note: 'Reads your risk rating',
+    note: 'Matches R3 against product risk grades',
     color: 'var(--color-brass)',
   },
   {
-    text: 'what are the A-share trading hours and price limits',
+    text: 'how is the maximum drawdown of a fund calculated',
     tag: 'Market',
-    note: 'Straight market facts',
+    note: 'Straight from the glossary',
     color: 'var(--color-azure)',
   },
 ]
 
-// Snapshot of the last full evaluation run (POST /eval/run, deepseek-chat).
-// Kept static on purpose: a live run takes ~59s, which is not a demo interaction.
+// Last recorded evaluation run (POST /eval/run, deepseek-chat). Static on purpose: a live
+// run is a ~59s batch, not an interaction.
+//
+// Shown as counts, not rates. These cases are the built-in evaluation set — small, and
+// scored by the same model family that produced the answers — so a rate to two decimals
+// would imply a precision the sample size does not support. The demo prompts above are
+// deliberately NOT drawn from this set.
 export const EVAL_SNAPSHOT = {
   ranAt: '2026-08-23',
   model: 'deepseek-chat',
-  wallClock: '58.7s',
   headline: [
-    { key: 'guardrail_hit_rate', value: 1.0 },
-    { key: 'intent_accuracy', value: 1.0 },
-    { key: 'pass_rate', value: 1.0 },
+    { key: 'guardrail intercepted', pass: 1, of: 1 },
+    { key: 'intent correct', pass: 12, of: 12 },
+    { key: 'dialog passed', pass: 6, of: 6 },
   ],
   quality: [
     { key: 'relevance', value: 0.9812 },
@@ -86,5 +87,5 @@ export const EVAL_SNAPSHOT = {
     { key: 'helpfulness', value: 0.9062 },
     { key: 'completeness', value: 0.875 },
   ],
-  cases: '9 cases · 12 intent + 6 dialog',
+  caveat: 'Quality scores are LLM-judged — directional, not independent. Guardrail interception is a deterministic assertion.',
 }

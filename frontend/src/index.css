@@ -194,3 +194,19 @@ body::before {
     transparent 7px 14px
   );
 }
+
+/* The composer used to slice the last line of a long answer in half. Give the stream room
+   and let the tail dissolve instead of ending on a hard edge. */
+.stream > div {
+  padding-bottom: 88px;
+}
+.stream::after {
+  content: "";
+  position: sticky;
+  bottom: 0;
+  display: block;
+  height: 56px;
+  margin-top: -56px;
+  background: linear-gradient(to top, var(--color-void) 18%, transparent);
+  pointer-events: none;
+}
