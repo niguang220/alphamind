@@ -6,6 +6,11 @@ import tailwindcss from '@tailwindcss/vite'
 // proxied here in dev so the browser stays same-origin.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.js'],
+    include: ['src/**/*.test.{js,jsx}'],
+  },
   server: {
     port: 5173,
     proxy: {

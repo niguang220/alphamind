@@ -28,7 +28,7 @@ export default function FusionBars({ scores, confidence }) {
     <div>
       <div className="flex items-baseline justify-between">
         <div className="label">How the intent was read</div>
-        <div className="tabular text-[12px] text-ink-soft">
+        <div className="tabular text-ui text-ink-soft">
           <span className="text-teal">{(confidence ?? 0).toFixed(2)}</span> combined
         </div>
       </div>
@@ -41,13 +41,13 @@ export default function FusionBars({ scores, confidence }) {
             <div key={key}>
               <div className="flex items-baseline justify-between gap-3">
                 <span
-                  className={`font-mono text-[11px] tracking-[0.08em] uppercase ${
+                  className={`font-mono text-meta tracking-[0.08em] uppercase ${
                     off ? 'text-ink-faint' : 'text-ink-soft'
                   }`}
                 >
                   {r.label}
                 </span>
-                <span className="tabular text-[11px] text-ink-mute">
+                <span className="tabular text-meta text-ink-mute">
                   {off ? '—' : val.toFixed(2)}
                   <span className="ml-2 text-ink-faint">
                     {off ? 'off' : `w ${weights[key].toFixed(2)}`}
@@ -57,7 +57,7 @@ export default function FusionBars({ scores, confidence }) {
               <div className="mt-1.5">
                 <Meter value={val} muted={off} color="var(--color-teal)" delay={i * 90} />
               </div>
-              <p className="mt-1.5 text-[11px] text-ink-faint">
+              <p className="mt-1.5 text-meta text-ink-faint">
                 {off
                   ? 'This provider has no embeddings API — weight went to the other two.'
                   : r.note}

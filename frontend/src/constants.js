@@ -20,8 +20,8 @@ export const AGENTS = {
   escalation: {
     label: 'Escalation',
     full: 'Human Advisor Escalation',
-    color: 'var(--color-ember)',
-    blurb: 'Routed away from automated answers.',
+    color: 'var(--color-violet)',
+    blurb: 'Hands the question to a licensed human advisor.',
   },
 }
 

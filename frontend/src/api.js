@@ -31,8 +31,6 @@ export const chat = ({ message, userId, convId }) =>
     body: { message, user_id: userId, conv_id: convId ?? null },
   })
 
-export const monitor = () => request('/monitor', { timeoutMs: 8000 })
-
 /**
  * A guardrail interception is NOT the same thing as `escalated`.
  *

@@ -28,7 +28,7 @@ function inline(text, keyBase) {
       out.push(
         <code
           key={`${keyBase}-c${i}`}
-          className="border border-rule bg-raised px-1 py-[1px] font-mono text-[0.85em] text-teal"
+          className="border border-hairline bg-raised px-1 py-[1px] font-mono text-[0.9em] text-ink"
         >
           {tok.slice(1, -1)}
         </code>,
@@ -76,13 +76,13 @@ export default function Markdown({ text }) {
         depth <= 2 ? (
           <h4
             key={i}
-            className="mt-6 mb-2.5 flex items-center gap-2.5 font-mono text-[11px] font-semibold tracking-[0.16em] text-teal uppercase first:mt-0"
+            className="mt-6 mb-2.5 flex items-center gap-2.5 font-mono text-meta font-semibold tracking-[0.16em] text-ink-soft uppercase first:mt-0"
           >
-            <span className="h-px w-3 bg-teal/50" />
+            <span className="h-px w-3 bg-rule-bright" />
             {h[2].replace(/[#*]/g, '')}
           </h4>
         ) : (
-          <h5 key={i} className="mt-4 mb-1.5 text-[13px] font-semibold text-ink">
+          <h5 key={i} className="mt-4 mb-1.5 text-ui font-semibold text-ink">
             {inline(h[2].replace(/[#*]/g, ''), `h${i}`)}
           </h5>
         ),
@@ -101,14 +101,14 @@ export default function Markdown({ text }) {
         i += 1
       }
       blocks.push(
-        <div key={`t${i}`} className="my-4 -mx-1 overflow-x-auto">
-          <table className="w-full border-collapse text-[12px]">
+        <div key={`t${i}`} className="my-4 overflow-x-auto">
+          <table className="w-full border-collapse text-ui">
             <thead>
               <tr>
                 {head.map((c, ci) => (
                   <th
                     key={ci}
-                    className="label border-b border-rule-bright px-2.5 py-2 text-left whitespace-nowrap"
+                    className="border-b border-rule-bright px-2.5 py-2 text-left font-mono text-meta tracking-[0.08em] whitespace-nowrap text-ink uppercase"
                   >
                     {c.replace(/\*/g, '')}
                   </th>
@@ -117,7 +117,7 @@ export default function Markdown({ text }) {
             </thead>
             <tbody>
               {rows.map((r, ri) => (
-                <tr key={ri} className="border-b border-rule/60">
+                <tr key={ri} className="border-b border-hairline odd:bg-white/[0.012]">
                   {r.map((c, ci) => (
                     <td
                       key={ci}
@@ -152,9 +152,9 @@ export default function Markdown({ text }) {
       blocks.push(
         <ul key={`l${i}`} className="my-3 space-y-1.5">
           {items.map((it, ii) => (
-            <li key={ii} className="flex gap-2.5 text-[13px] leading-[1.62] text-ink-soft">
-              <span className="tabular mt-[1px] shrink-0 text-[11px] text-teal/60">
-                {isOl ? `${it.n}.` : '·'}
+            <li key={ii} className="flex gap-2.5 text-ui leading-[1.62] text-ink-soft">
+              <span className="tabular mt-[2px] w-4 shrink-0 text-right text-meta text-ink-faint">
+                {isOl ? `${it.n}.` : '\u2022'}
               </span>
               <span className="min-w-0">{inline(it.body, `li${ii}`)}</span>
             </li>
@@ -172,7 +172,7 @@ export default function Markdown({ text }) {
     }
     if (buf.length) {
       blocks.push(
-        <p key={`p${i}`} className="my-2.5 text-[13.5px] leading-[1.68] text-ink-soft first:mt-0">
+        <p key={`p${i}`} className="my-2.5 text-body leading-[1.68] text-ink-soft first:mt-0">
           {inline(buf.join(' '), `p${i}`)}
         </p>,
       )

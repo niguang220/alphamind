@@ -8,28 +8,37 @@ export default function AnswerCard({ turn, selected, onSelect }) {
 
   return (
     <article
+      tabIndex={0}
+      role="button"
+      aria-pressed={selected}
+      aria-label={`${meta.label} answer — show how it was decided`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect?.()
+        }
+      }}
       onClick={onSelect}
-      className={`rise cursor-pointer border bg-panel/70 transition-colors ${
-        selected ? 'border-rule-bright' : 'border-rule hover:border-rule-bright/70'
-      }`}
+      className="rise cursor-pointer bg-card shadow-card transition-colors"
+      style={{ borderLeft: `3px solid ${selected ? meta.color : 'transparent'}` }}
     >
-      <header className="flex flex-wrap items-center gap-2 border-b border-rule px-5 py-3">
+      <header className="flex flex-wrap items-center gap-2 border-b border-hairline px-5 py-3">
         <span
-          className="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase"
+          className="inline-flex items-center gap-2 font-mono text-meta font-semibold tracking-[0.16em] uppercase"
           style={{ color: meta.color }}
         >
           <span className="inline-block h-[7px] w-[7px]" style={{ background: meta.color }} />
           {meta.label}
         </span>
 
-        <span className="text-[10px] text-ink-faint">/</span>
-        <span className="font-mono text-[11px] tracking-[0.06em] text-ink-mute">
+        <span className="text-meta text-ink-faint">/</span>
+        <span className="font-mono text-meta tracking-[0.06em] text-ink-mute">
           {(turn.intent || '').replace(/_/g, ' ')}
         </span>
 
         {supporting.length > 0 && (
           <>
-            <span className="text-[10px] text-ink-faint">+</span>
+            <span className="text-meta text-ink-faint">+</span>
             {supporting.map((s) => (
               <Chip key={s} color={agentMeta(s).color}>
                 {agentMeta(s).label} · supporting

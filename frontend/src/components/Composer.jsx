@@ -22,7 +22,7 @@ export default function Composer({ value, onChange, onSubmit, busy, disabled }) 
           busy ? 'border-teal/35' : 'border-rule focus-within:border-rule-bright'
         }`}
       >
-        <span className="pb-[3px] font-mono text-[13px] leading-none text-teal/70 select-none">
+        <span className="pb-[3px] font-mono text-ui leading-none text-teal/70 select-none">
           ›
         </span>
         <textarea
@@ -40,21 +40,21 @@ export default function Composer({ value, onChange, onSubmit, busy, disabled }) 
           placeholder={
             disabled ? 'Backend unreachable' : 'Ask about a security, a product, or the rules…'
           }
-          className="max-h-42 min-h-[20px] flex-1 resize-none bg-transparent text-[13.5px] leading-[1.5] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
+          className="max-h-42 min-h-[20px] flex-1 resize-none bg-transparent text-body leading-[1.5] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
         />
         <button
           onClick={submit}
           disabled={busy || disabled || !value.trim()}
-          className="shrink-0 border border-rule-bright px-3 py-[5px] font-mono text-[10px] font-medium tracking-[0.14em] text-ink-mute uppercase transition-colors enabled:hover:border-teal enabled:hover:text-teal disabled:opacity-35"
+          className="shrink-0 border px-3 py-[5px] font-mono text-meta font-medium tracking-[0.14em] uppercase transition-colors enabled:border-teal/60 enabled:text-teal enabled:hover:border-teal enabled:hover:bg-teal/10 disabled:border-rule disabled:text-ink-faint"
         >
-          {busy ? 'running' : 'send'}
+          {busy ? 'Working' : 'Send'}
         </button>
       </div>
       <div className="mt-2 flex items-center justify-between px-1">
-        <span className="text-[10px] text-ink-faint">
+        <span className="text-meta text-ink-faint">
           Enter to send · Shift+Enter for a new line
         </span>
-        <span className="text-[10px] text-ink-faint">
+        <span className="text-meta text-ink-faint">
           Answers follow the language you write in
         </span>
       </div>

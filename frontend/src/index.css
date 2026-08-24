@@ -18,16 +18,45 @@
   --color-ink-mute: #8ba3a9;
   --color-ink-faint: #6f898f;
 
-  --color-teal: #4dbaa6;
+  /* Agent identity. One hue per agent, used only on the agent's own chip, name and spine.
+     Escalation gets its own colour rather than borrowing the failure hue: routing a
+     question to a human is the system working, not the system breaking. */
+  --color-azure: #68a2d4;   /* Market     */
+  --color-teal: #4dbaa6;    /* Research   */
+  --color-brass: #e8ae4a;   /* Compliance */
+  --color-violet: #b98cd6;  /* Escalation */
+
+  /* State. A separate channel from identity, deliberately narrow. */
+  --color-ember: #e57b5a;   /* failure only */
   --color-teal-dim: #2f7d6e;
-  --color-brass: #e8ae4a;
   --color-brass-dim: #8a6425;
-  --color-ember: #e57b5a;
-  --color-azure: #68a2d4;
+
+  /* Two rules, two jobs. Structural separates lanes and panels; hairline divides rows
+     inside a component. One value doing both meant every boundary read equally loud. */
+  --color-hairline: #1b262b;
+  --color-card: #101619;
 
   --font-display: "Instrument Serif", "Noto Sans SC", "Iowan Old Style", Georgia, serif;
   --font-sans: "IBM Plex Sans", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Noto Sans SC", ui-monospace, SFMono-Regular, monospace;
+
+  /* Six steps, ~1.25 ratio. Replaces fourteen ad-hoc sizes, eleven of which sat inside a
+     5.5px band — which is a fog, not a hierarchy. */
+  --text-meta: 11px;
+  --text-meta--line-height: 1.35;
+  --text-ui: 13px;
+  --text-ui--line-height: 1.55;
+  --text-body: 15px;
+  --text-body--line-height: 1.62;
+  --text-lead: 20px;
+  --text-lead--line-height: 1.4;
+  --text-metric: 28px;
+  --text-metric--line-height: 1;
+  --text-display: 34px;
+  --text-display--line-height: 1.22;
+
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 18px 44px -20px rgb(0 0 0 / 0.9);
+  --shadow-rail: -28px 0 56px -28px rgb(0 0 0 / 0.75);
 }
 
 /* ── base ─────────────────────────────────────────────────────────────── */
@@ -92,9 +121,9 @@ body::before {
 /* ── typography helpers ───────────────────────────────────────────────── */
 .label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-meta);
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-ink-faint);
 }
@@ -148,17 +177,6 @@ body::before {
   }
 }
 
-@keyframes seal-in {
-  from {
-    opacity: 0;
-    transform: rotate(-9deg) scale(1.25);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(-9deg) scale(1);
-  }
-}
-
 .rise {
   animation: rise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -171,9 +189,6 @@ body::before {
 }
 .blink {
   animation: blink 1.05s steps(1) infinite;
-}
-.seal-in {
-  animation: seal-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -26,6 +26,7 @@ export default function App() {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [railOpen, setRailOpen] = useState(false)
   const convId = useRef(null)
   const streamEnd = useRef(null)
 
@@ -76,7 +77,7 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         <main className="grid min-w-0 flex-1 grid-rows-[1fr_auto]">
-          <div className="stream min-h-0 overflow-y-auto">
+          <div className="stream min-h-0 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy}>
             <div className={`${LANE} ${turns.length === 0 ? 'pt-[12vh] pb-10' : 'py-8'}`}>
               {turns.length === 0 ? (
                 <Welcome onPick={send} disabled={status === 'offline'} />
@@ -116,9 +117,31 @@ export default function App() {
           </div>
         </main>
 
+        {/* Below xl the rail used to vanish outright, taking the product's whole argument
+            with it. It is now a drawer instead of an absence. */}
         <div className="hidden w-[384px] shrink-0 xl:block">
           <Inspector turn={inspected} />
         </div>
+        {railOpen && (
+          <div className="fixed inset-0 z-30 flex xl:hidden">
+            <button
+              aria-label="Close the decision panel"
+              className="flex-1 bg-void/70 backdrop-blur-sm"
+              onClick={() => setRailOpen(false)}
+            />
+            <div className="w-[min(384px,88vw)] shadow-rail">
+              <Inspector turn={inspected} />
+            </div>
+          </div>
+        )}
+        {!railOpen && (
+          <button
+            onClick={() => setRailOpen(true)}
+            className="fixed right-4 bottom-28 z-20 border border-rule-bright bg-panel px-3 py-2 font-mono text-meta tracking-[0.1em] text-ink-mute uppercase shadow-card transition-colors hover:text-ink xl:hidden"
+          >
+            How it decided
+          </button>
+        )}
       </div>
     </div>
   )
@@ -161,10 +184,10 @@ function describe(e) {
 function UserTurn({ text }) {
   return (
     <div className="rise flex items-start gap-4">
-      <span className="mt-[5px] shrink-0 font-mono text-[11px] tracking-[0.1em] text-ink-faint uppercase">
+      <span className="mt-[5px] shrink-0 font-mono text-meta tracking-[0.1em] text-ink-faint uppercase">
         You
       </span>
-      <p className="min-w-0 text-[16px] leading-[1.5] text-ink">{text}</p>
+      <p className="min-w-0 text-body leading-[1.5] text-ink">{text}</p>
     </div>
   )
 }
@@ -172,8 +195,8 @@ function UserTurn({ text }) {
 function ErrorTurn({ error }) {
   return (
     <div className="rise border border-ember/40 bg-ember/[0.05] px-5 py-4">
-      <div className="text-[13px] font-semibold text-ember">{error.title}</div>
-      <p className="mt-1 text-[13px] leading-[1.6] text-ink-soft">{error.body}</p>
+      <div className="text-ui font-semibold text-ember">{error.title}</div>
+      <p className="mt-1 text-ui leading-[1.6] text-ink-soft">{error.body}</p>
     </div>
   )
 }
@@ -181,11 +204,11 @@ function ErrorTurn({ error }) {
 function Welcome({ onPick, disabled }) {
   return (
     <div className="rise">
-      <p className="font-display text-[34px] leading-[1.22] text-ink">
+      <p className="font-display text-display leading-[1.22] text-ink">
         Securities research from four agents — and{' '}
         <span className="text-teal italic">a record of how each answer was reached</span>.
       </p>
-      <p className="mt-5 max-w-[62ch] text-[14px] leading-[1.7] text-ink-mute">
+      <p className="mt-5 max-w-[62ch] text-body leading-[1.7] text-ink-mute">
         Ask about a company, a product, or the rules. Three specialists cover markets,
         research and compliance; a fourth takes anything that asks for a buy call and hands it
         to a licensed advisor instead.
@@ -198,7 +221,7 @@ function Welcome({ onPick, disabled }) {
               className="inline-block h-[7px] w-[7px] shrink-0"
               style={{ background: a.color }}
             />
-            <span className="text-[12.5px] leading-[1.5]">
+            <span className="text-ui leading-[1.5]">
               <span style={{ color: a.color }}>{a.label}</span>
               <span className="text-ink-faint"> — {a.blurb}</span>
             </span>
@@ -223,15 +246,15 @@ function Welcome({ onPick, disabled }) {
             className="rise group flex flex-col items-start bg-desk px-5 py-4 text-left transition-colors hover:bg-panel disabled:opacity-40"
           >
             <span
-              className="font-mono text-[10px] font-medium tracking-[0.16em] uppercase"
+              className="font-mono text-meta font-medium tracking-[0.16em] uppercase"
               style={{ color: s.color }}
             >
               {s.tag}
             </span>
-            <p className="mt-2 text-[13px] leading-[1.5] text-ink-soft group-hover:text-ink">
+            <p className="mt-2 text-ui leading-[1.5] text-ink-soft group-hover:text-ink">
               {s.text}
             </p>
-            <p className="mt-2 text-[11px] text-ink-faint">{s.note}</p>
+            <p className="mt-2 text-meta text-ink-faint">{s.note}</p>
           </button>
         ))}
       </div>

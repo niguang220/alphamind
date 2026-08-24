@@ -41,3 +41,4 @@ docker-compose(1).yml
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/coverage/

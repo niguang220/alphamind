@@ -21,7 +21,7 @@ export default function Pipeline({ state, guardrail, timings, totalMs }) {
     <div className="border-t border-rule bg-void/40 px-5 py-3.5">
       <div className="flex items-baseline justify-between gap-4">
         <div className="label">Where the time went</div>
-        <div className="tabular text-[11px] text-ink-soft">
+        <div className="tabular text-meta text-ink-soft">
           <span style={{ color: accent }}>{fmt(total)}</span> total
         </div>
       </div>
@@ -53,14 +53,14 @@ export default function Pipeline({ state, guardrail, timings, totalMs }) {
           return (
             <div key={s.id} className="flex items-baseline justify-between gap-2">
               <span
-                className={`font-mono text-[10px] tracking-[0.1em] uppercase ${
+                className={`font-mono text-meta tracking-[0.1em] uppercase ${
                   zero ? 'text-ink-faint' : 'text-ink-mute'
                 }`}
               >
                 {s.label}
               </span>
               <span
-                className="tabular text-[11px]"
+                className="tabular text-meta"
                 style={{ color: zero ? 'var(--color-ink-faint)' : 'var(--color-ink-soft)' }}
               >
                 {fmt(ms)}
@@ -71,7 +71,7 @@ export default function Pipeline({ state, guardrail, timings, totalMs }) {
       </div>
 
       {guardrail && (
-        <p className="mt-3 border-t border-brass/25 pt-2.5 text-[12px] leading-[1.55] text-brass/90">
+        <p className="mt-3 border-t border-brass/25 pt-2.5 text-ui leading-[1.55] text-brass/90">
           The agent stage cost nothing — the request was screened out before any agent ran, and
           the refusal is a fixed compliance template rather than generated text.
         </p>
@@ -86,10 +86,10 @@ function Running() {
   return (
     <div className="rise flex flex-wrap items-center gap-x-3 gap-y-1 border border-rule bg-panel px-5 py-3.5">
       <span className="node-live inline-block h-[7px] w-[7px] shrink-0 bg-teal" />
-      <span className="text-[13px] text-ink-mute">
+      <span className="text-ui text-ink-mute">
         Working<span className="blink">…</span>
       </span>
-      <span className="text-[11px] text-ink-faint">
+      <span className="text-meta text-ink-faint">
         classifying, screening, then routing to an agent
       </span>
     </div>
