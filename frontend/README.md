@@ -35,17 +35,20 @@ advisor — a Compliance answer about margin trading does exactly that — and r
 guardrail cards would be wrong.
 
 **Routing telemetry.** Every answer carries its agent, intent and group, primary and
-supporting agents, routing reason and confidence, latency, and whether the knowledge base was
-consulted. The inspector rail expands the latest turn; click any answer to pin it.
+supporting agents, routing reason, latency, and whether the knowledge base was consulted. The
+domain score is shown as `routing_score` — an additive sum of intent, keyword and entity
+bonuses, so it is unbounded and is not a probability; a rule-decided turn shows `rule` rather
+than a number. The inspector rail expands the latest turn; click any answer to pin it.
 
 **Intent fusion, including what is switched off.** The three-route vote is drawn as three
 meters. On an Anthropic-compatible third-party provider the embedding route is disabled at
 construction and its weight is redistributed, so it is drawn as an explicitly disabled track
 with the reason — a permanently empty bar with no explanation would just look broken.
 
-**The pipeline strip** mirrors the four real stages of `AgentOrchestrator.run()`. While a
-request is in flight it advances on indicative pacing; the only measured number shown is the
-end-to-end latency the backend reports.
+**The pipeline strip** mirrors the four real stages of a `/chat` request, and every number on
+it is measured server-side and returned in `timings` — the bar widths are the actual share of
+the request each stage took. On a guardrail hit the agent stage reads 0ms because generation
+genuinely never ran.
 
 ## Layout
 
