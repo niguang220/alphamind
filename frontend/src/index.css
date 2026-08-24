@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────────────────
+   AlphaMind — research desk palette.
+   Near-black with a cool marine cast; two semantic accents:
+   teal reads "data / research", brass reads "compliance / intervention".
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-void: #05080a;
+  --color-desk: #0d1417;
+  --color-panel: #151f23;
+  --color-raised: #1e2a2f;
+  --color-rule: #2b3c43;
+  --color-rule-bright: #41575f;
+
+  --color-ink: #e8f0f1;
+  --color-ink-soft: #adc0c4;
+  --color-ink-mute: #8ba3a9;
+  --color-ink-faint: #6f898f;
+
+  --color-teal: #4dbaa6;
+  --color-teal-dim: #2f7d6e;
+  --color-brass: #e8ae4a;
+  --color-brass-dim: #8a6425;
+  --color-ember: #e57b5a;
+  --color-azure: #68a2d4;
+
+  --font-display: "Instrument Serif", "Noto Sans SC", "Iowan Old Style", Georgia, serif;
+  --font-sans: "IBM Plex Sans", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Noto Sans SC", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ── base ─────────────────────────────────────────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv05" 1, "ss01" 1;
+}
+
+/* Faint engineering grid + vignette. Sets the "terminal" ground without noise. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(77, 186, 166, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(77, 186, 166, 0.055) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 110% 80% at 50% 0%, #000 20%, transparent 78%);
+}
+
+::selection {
+  background: var(--color-teal-dim);
+  color: #eafffb;
+}
+
+/* ── scrollbars: thin, terminal-like ──────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rule-bright) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-rule-bright);
+  border-radius: 0;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-faint);
+  background-clip: content-box;
+}
+
+/* ── typography helpers ───────────────────────────────────────────────── */
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── motion ───────────────────────────────────────────────────────────── */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pulse-node {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(77, 186, 166, 0.45);
+  }
+  50% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px rgba(77, 186, 166, 0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes seal-in {
+  from {
+    opacity: 0;
+    transform: rotate(-9deg) scale(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+
+.rise {
+  animation: rise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sweep {
+  transform-origin: left;
+  animation: sweep 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.node-live {
+  animation: pulse-node 1.35s ease-in-out infinite;
+}
+.blink {
+  animation: blink 1.05s steps(1) infinite;
+}
+.seal-in {
+  animation: seal-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── hazard band for the guardrail card header ────────────────────────── */
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(232, 174, 74, 0.18) 0 7px,
+    transparent 7px 14px
+  );
+}

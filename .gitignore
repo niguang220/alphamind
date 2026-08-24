@@ -36,3 +36,8 @@ build-image*.sh
 *~
 *.bak
 docker-compose(1).yml
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

@@ -418,10 +418,16 @@ Available intents: {", ".join(c.value for c in IntentCategory)}"""
         message = self._clean_text(message)
         # Note: use lookaround rather than \b for the left boundary, so a token still matches
         # when it sits directly next to a non-ASCII character (non-ASCII letters count as \w in Python re).
+        #
+        # Tickers are matched as exchange codes only — a bare [A-Z]{2,5} run is an acronym
+        # detector, not a ticker detector, and happily returned CSI / ETF / ROE.
+        # Metrics need boundaries on both sides, or PE matches inside "open" and "expensive".
         return {
-            "ticker": self._unique(re.findall(r"(?<![A-Za-z0-9])(\d{6}|[A-Z]{2,5})(?![A-Za-z0-9])", message)),
+            "ticker": self._unique(re.findall(
+                r"(?<![A-Za-z0-9.])(\d{6}(?:\.(?:SH|SZ|SS|BJ))?|\d{4,5}\.HK)(?![A-Za-z0-9])",
+                message, re.I)),
             "metric": self._unique(re.findall(
-                r"(P/E|P/B|P/S|PE|PB|ROE|ROA|EPS|Sharpe|drawdown|volatility|Beta|Alpha)",
+                r"(?<![A-Za-z])(P/E|P/B|P/S|PE|PB|ROE|ROA|EPS|Sharpe|drawdown|volatility|Beta|Alpha)(?![A-Za-z])",
                 message, re.I)),
             "risk_level": [v.upper() for v in self._unique(
                 re.findall(r"(?<![A-Za-z])([RrCc][1-5])(?![0-9])", message))],

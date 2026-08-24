@@ -40,3 +40,19 @@ def test_entities_english():
     assert any("P/E" in m.upper() for m in e["metric"])
     assert "R3" in e["risk_level"]
     assert any("20%" in p for p in e["percentage"])
+
+
+def test_entities_reject_lookalikes():
+    """Metrics and tickers must not fire on substrings or plain acronyms."""
+    r = _rec()
+    e = r._extract_entities("is the CSI 300 ETF's valuation expensive? can I open margin trading")
+    # "PE" hides inside "expensive" and "open"; neither is a metric.
+    assert e["metric"] == [], e["metric"]
+    # CSI / ETF / ROE are acronyms, not exchange codes.
+    assert e["ticker"] == [], e["ticker"]
+
+
+def test_entities_exchange_suffixes():
+    r = _rec()
+    assert "600519.SH" in r._extract_entities("compare 600519.SH with peers")["ticker"]
+    assert "00700.HK" in r._extract_entities("what about 00700.HK")["ticker"]

@@ -186,7 +186,15 @@ class BaseAgent:
         return extract_text_content(resp.content)
 
     # Make replies follow the user's language while keeping content (prompts/knowledge) in English.
-    _LANG_DIRECTIVE = "\n\nAlways respond in the same language as the user's latest message (Chinese or English)."
+    # The subject matter is mostly Chinese markets, and a Chinese-trained model will happily
+    # answer a question about the CSI 300 in Chinese however politely you ask. Naming that
+    # failure mode explicitly is what makes the instruction stick.
+    _LANG_DIRECTIVE = (
+        "\n\nWrite your entire reply in the same language as the user's latest message. "
+        "If the user writes in English, answer in English even when the subject is a Chinese "
+        "market, index, company or regulation — translate any Chinese source material instead "
+        "of switching language. If the user writes in Chinese, answer in Chinese."
+    )
 
     def _build_system_prompt(self, req: Request) -> str:
         """Splice dynamically loaded Skills into the system prompt so business rules apply per request."""
