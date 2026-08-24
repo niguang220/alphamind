@@ -159,14 +159,12 @@ function Welcome({ onPick, disabled }) {
   return (
     <div className="rise">
       <p className="max-w-xl font-display text-[27px] leading-[1.28] text-ink">
-        A multi-agent research desk that{' '}
-        <span className="text-brass italic">refuses to pick your stocks</span> — and shows
-        you exactly how it decided.
+        Securities research from three specialists — with{' '}
+        <span className="text-teal italic">a clear view of how each answer was reached</span>.
       </p>
       <p className="mt-4 max-w-xl text-[13px] leading-[1.7] text-ink-mute">
-        Ask about a company, a product, or the rules. Three specialists cover markets,
-        research and compliance — and anything that asks for a buy call gets stopped before
-        it reaches them.
+        Ask about a company, a product, or the rules. Every answer shows which specialist
+        took it and why. Ask it to pick a stock and it declines — by design.
       </p>
 
       <div className="mt-8 mb-3 flex items-center gap-3">
