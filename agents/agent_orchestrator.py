@@ -357,7 +357,7 @@ class AgentOrchestrator:
                 agent_types=[AgentType.MARKET],
                 primary_agent=AgentType.MARKET,
                 routing_reason="low-confidence OTHER intent, ask user to clarify",
-                routing_confidence=req.intent_confidence,
+                routing_score=None,  # clarification is a rule, not a score
             )
 
         # Auto parallel collaboration for complex questions, e.g. one message about research/valuation and suitability/risk-rating.

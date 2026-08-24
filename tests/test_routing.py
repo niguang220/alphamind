@@ -70,3 +70,25 @@ def test_guardrail_response_english():
     assert res.agent_type == AgentType.ESCALATION
     assert "does not constitute investment advice" in res.response
     assert "guardrail" in res.routing_reason
+
+
+# ── Clarification path ───────────────────────────────────────────────────────
+
+def test_clarification_result_is_constructible():
+    """
+    The clarification branch short-circuits before any LLM call, so nothing else in the
+    suite reaches it. It once passed a `routing_confidence=` kwarg that no longer existed
+    on OrchestratorResult, which made every low-confidence OTHER question a 500.
+    """
+    import asyncio
+    o = _orch()
+    req = Request(message="hmm what about that thing we discussed", user_id="u", conv_id="c",
+                  intent=IntentCategory.OTHER, intent_confidence=0.2)
+    assert o._needs_clarification(req) is True
+
+    res = asyncio.run(o.run(req))
+    assert res.escalated is False
+    assert res.primary_agent == AgentType.MARKET
+    assert "clarify" in res.routing_reason
+    # No agent scored this turn, so there is no domain score to report.
+    assert res.routing_score is None
