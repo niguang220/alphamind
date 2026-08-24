@@ -79,7 +79,7 @@ export const EVAL_SNAPSHOT = {
   headline: [
     { key: 'guardrail intercepted', pass: 1, of: 1 },
     { key: 'intent correct', pass: 12, of: 12 },
-    { key: 'dialog passed', pass: 6, of: 6 },
+    { key: 'dialog turns passed', pass: 8, of: 8 },
   ],
   quality: [
     { key: 'relevance', value: 0.9812 },
