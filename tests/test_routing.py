@@ -92,3 +92,26 @@ def test_clarification_result_is_constructible():
     assert "clarify" in res.routing_reason
     # No agent scored this turn, so there is no domain score to report.
     assert res.routing_score is None
+
+
+def test_guardrail_keyword_needs_word_boundaries():
+    """
+    A bare substring test escalated "What is a small investment account?" as an advice
+    request, because "all in" sits inside "sm(all in)vestment". Guardrail false positives
+    are paid for by the user: they are refused an answer they were entitled to.
+
+    The keywords that remain deliberately broad ("recommend", "guaranteed") are a separate,
+    accepted trade-off — for investment advice, over-refusing beats under-refusing.
+    """
+    o = _orch()
+    for msg in ["What is a small investment account?",
+                "How do I make a small initial deposit?",
+                "What is the installment schedule?"]:
+        req = Request(message=msg, user_id="u", conv_id="c", intent=IntentCategory.PRODUCT_INFO)
+        assert o._needs_guardrail(req) is False, msg
+
+    for msg in ["I want to go all in on this",
+                "recommend me a stock that will double",
+                "which to buy, A or B?"]:
+        req = Request(message=msg, user_id="u", conv_id="c", intent=IntentCategory.PRODUCT_INFO)
+        assert o._needs_guardrail(req) is True, msg

@@ -83,23 +83,46 @@ class CircuitBreaker:
         self.state       = CircuitState.CLOSED
         self.fail_count  = 0
         self.opened_at:  Optional[float] = None
+        self._probe_in_flight = False
 
     def allow(self) -> bool:
+        """
+        HALF_OPEN admits exactly one probe, not one per caller.
+
+        Returning True unconditionally in HALF_OPEN made the breaker useless in the case it
+        exists for: when the recovery window elapses under concurrent load, every waiting
+        caller is admitted at once and the failing dependency is hit by the same stampede the
+        breaker just opened to prevent. The probe flag is cleared by record_success or
+        record_failure, so at most one request is in flight while the state is being decided.
+        """
         if self.state == CircuitState.CLOSED:
             return True
         if self.state == CircuitState.OPEN:
             if time.monotonic() - self.opened_at >= self.recovery_s:  # type: ignore
                 self.state = CircuitState.HALF_OPEN
+                self._probe_in_flight = True
                 return True
             return False
-        return True  # HALF_OPEN: allow one probe
+        # HALF_OPEN: admit one probe; refuse the rest until it reports back.
+        if self._probe_in_flight:
+            return False
+        self._probe_in_flight = True
+        return True
 
     def record_success(self) -> None:
         self.fail_count = 0
         self.state = CircuitState.CLOSED
+        self._probe_in_flight = False
 
     def record_failure(self) -> None:
         self.fail_count += 1
+        self._probe_in_flight = False
+        if self.state == CircuitState.HALF_OPEN:
+            # A failed probe reopens immediately; the recovery window restarts from now.
+            self.state     = CircuitState.OPEN
+            self.opened_at = time.monotonic()
+            logger.warning("circuit breaker reopened: probe failed while half-open")
+            return
         if self.fail_count >= self.threshold:
             self.state     = CircuitState.OPEN
             self.opened_at = time.monotonic()

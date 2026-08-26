@@ -18,6 +18,7 @@ Escalation:
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -587,42 +588,6 @@ class AgentOrchestrator:
             f"primary={primary_agent.value}, supporting={support_text}, scores=[{score_text}]"
         )
 
-    def _collaboration_targets(self, req: Request) -> List[AgentType]:
-        """
-        Decide whether several agents should collaborate in parallel.
-
-        Intent recognition usually returns a single primary intent; here domain keywords
-        additionally detect compound questions that need two agents at once.
-        """
-        msg = req.message.lower()
-        targets: List[AgentType] = []
-
-        research_kws = ["research report", "earnings", "valuation", "p/e", "pe ratio", "factor",
-                        "backtest", "fundamentals", "tracking error", "compare"]
-        compliance_kws = ["suitability", "risk level", "risk rating", "risk assessment", "risk disclosure",
-                          "open an account", "bank transfer", "withdraw", "deposit", "fee rate", "can i buy"]
-
-        if req.intent in (
-            IntentCategory.RESEARCH_REPORT,
-            IntentCategory.FUNDAMENTAL,
-            IntentCategory.VALUATION,
-            IntentCategory.COMPARISON,
-            IntentCategory.QUANT_CONCEPT,
-        ) or any(kw in msg for kw in research_kws):
-            targets.append(AgentType.RESEARCH)
-        if req.intent in (
-            IntentCategory.ACCOUNT,
-            IntentCategory.FUNDING,
-            IntentCategory.SUITABILITY,
-            IntentCategory.RISK_DISCLOSURE,
-            IntentCategory.STATEMENT,
-        ) or any(kw in msg for kw in compliance_kws):
-            targets.append(AgentType.COMPLIANCE)
-
-        # dedupe preserving order, and only return agent types that currently have instances.
-        deduped = list(dict.fromkeys(targets))
-        return [agent_type for agent_type in deduped if self._pool.get(agent_type)]
-
     @staticmethod
     def _needs_clarification(req: Request) -> bool:
         """When confidence is low and intent is unclear, ask first to avoid misrouting."""
@@ -642,12 +607,22 @@ class AgentOrchestrator:
         "double my money", "price target", "tell me what to buy",
     ]
 
+    # Word-boundary matcher built once from _GUARDRAIL_KEYWORDS.
+    #
+    # A bare substring test is wrong here and wrong in a way that hits real users: "all in"
+    # matches "sm(all in)vestment", so "What is a small investment account?" was escalated to a
+    # human advisor as an advice request. Guardrail false positives are cheap to reason about
+    # and expensive to experience — the user is refused an answer they were entitled to.
+    _GUARDRAIL_PATTERN = re.compile(
+        r"(?<![A-Za-z])(?:" + "|".join(re.escape(kw) for kw in _GUARDRAIL_KEYWORDS) + r")(?![A-Za-z])",
+        re.IGNORECASE,
+    )
+
     def _needs_guardrail(self, req: Request) -> bool:
         """Whether the investment-advice guardrail is hit: intent is advice_request, or the message contains stock-pick/timing/guaranteed-return/trade-for-me keywords."""
         if req.intent == IntentCategory.ADVICE_REQUEST:
             return True
-        msg = (req.message or "").lower()
-        return any(kw in msg for kw in self._GUARDRAIL_KEYWORDS)
+        return bool(self._GUARDRAIL_PATTERN.search(req.message or ""))
 
     def _guardrail_response(self, req: Request, elapsed_ms: float) -> OrchestratorResult:
         """Guardrail-safe response: compliant refusal + risk disclosure + escalation, bypassing domain agents."""
