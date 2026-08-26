@@ -332,7 +332,18 @@ class AgentOrchestrator:
         """
         t0 = time.monotonic()
 
-        # 1. intent recognition (skip if the caller already provided it)
+        # 1. keyword guardrail, before anything bills a token.
+        #
+        # The keyword branch never needed the intent label, so running it after intent
+        # recognition only meant paying for a classification call on a request that was always
+        # going to be refused. It now runs first: an unambiguous advice request ("recommend a
+        # stock that will double") is intercepted at zero model cost. The intent branch still
+        # runs below, because it catches the phrasings no keyword list will.
+        if self._GUARDRAIL_PATTERN.search(req.message or ""):
+            logger.info(f"request {req.request_id} hit the investment-advice guardrail (keyword, pre-LLM)")
+            return self._guardrail_response(req, (time.monotonic() - t0) * 1000)
+
+        # 2. intent recognition (skip if the caller already provided it)
         if req.intent is None:
             intent_result = await self._intent_recognizer.recognize(req.message, history=req.history)
             req.intent  = intent_result.intent
@@ -340,7 +351,7 @@ class AgentOrchestrator:
             req.urgency = intent_result.urgency
             req.intent_confidence = intent_result.confidence
 
-        # 2. investment-advice guardrail: intercept & escalate stock-pick/timing/guaranteed-return/trade-for-me requests
+        # 3. investment-advice guardrail: semantic branch, for advice requests the keywords miss
         if self._needs_guardrail(req):
             logger.info(f"request {req.request_id} hit the investment-advice guardrail")
             return self._guardrail_response(req, (time.monotonic() - t0) * 1000)

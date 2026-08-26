@@ -1,0 +1,25 @@
+{
+  "repeats": 7,
+  "agents_dispatched": [
+    "compliance",
+    "research"
+  ],
+  "per_agent_delay_s": {
+    "compliance": 0.4,
+    "research": 0.25
+  },
+  "slowest_single_s": 0.4,
+  "serial_would_be_s": 0.65,
+  "wall_clock_median_s": 0.4011,
+  "wall_over_slowest": 1.003,
+  "wall_over_serial": 0.617,
+  "walls_s": [
+    0.4011,
+    0.4007,
+    0.4067,
+    0.4012,
+    0.4009,
+    0.4011,
+    0.4036
+  ]
+}

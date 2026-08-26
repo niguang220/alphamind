@@ -115,3 +115,28 @@ def test_guardrail_keyword_needs_word_boundaries():
                 "which to buy, A or B?"]:
         req = Request(message=msg, user_id="u", conv_id="c", intent=IntentCategory.PRODUCT_INFO)
         assert o._needs_guardrail(req) is True, msg
+
+
+def test_keyword_guardrail_runs_before_any_model_call():
+    """
+    The keyword branch never needed the intent label. Running it after intent recognition
+    meant paying for a classification call on a request that was always going to be refused.
+
+    This asserts the ordering directly: with no intent supplied and a recognizer that would
+    raise if called, an unambiguous advice request must still be intercepted.
+    """
+    import asyncio
+
+    class ExplodingRecognizer:
+        async def recognize(self, *a, **kw):
+            raise AssertionError("intent recognition ran before the keyword guardrail")
+
+    o = _orch()
+    o._intent_recognizer = ExplodingRecognizer()
+
+    req = Request(message="recommend a stock that will double", user_id="u", conv_id="c")
+    res = asyncio.run(o.run(req))
+
+    assert res.escalated is True
+    assert res.routing_reason.startswith("guardrail=")
+    assert "does not constitute investment advice" in res.response
